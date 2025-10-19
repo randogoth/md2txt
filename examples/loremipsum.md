@@ -1,19 +1,23 @@
 ---
-h1_font: colossal
-h2_font: big
-h3_font: small
+h1_font: big
+h2_font: small
+h3_font: caps
+paragraph_spacing: 2
+hyphenate: true
 ---
 
 # Salientia
-{:.center}
+{:.right}
 
 ## Structa hinc vetitus factum
+{:.center}
 
 Lorem markdownum omnes tellus, in, Herculeis `reciprocalPower` neque promissa
 est Latiae caput umero talia fidissima, nymphae. Foedera et sagittas tenetur
 adde matri esse: talia manibus.
 
 ## Fuit video longique dedisse
+{:.center}
 
 Ille stupet, ultra **incunabula agendum urbes** mirer **aper**, metu. Aegides
 novissima sunt turis quatiebant umbrosaque [putares](#mille-parva). Metuunt
@@ -25,6 +29,7 @@ omnia inmotusque, est et aetas sonus. Exhibuit coeperunt, canis. Suis minora,
 tempore fateor neve moderamine erit. Non *hoc radiis*, Aenea etiamnum cogeris
 superinposita origine nec `hardening_search` dixit vicina. Heros subito
 populifer adeunt quicquam cum **ales** Ixion angulus placet reddere.
+{:.right}
 
 ## Tractaque serpens arva quoque
 

@@ -17,6 +17,7 @@ This repository contains command line helpers for transforming Markdown into for
 ## Requirements
 
 - Python 3.9+.
+- Optional: `PyHyphen` (preferred) or `pyphen` for dictionary-driven hyphenation.
 - Optional: `pyfiglet` for FIGlet headings (`pip install pyfiglet`). When unavailable, headings fall back to the H4-style renderer automatically.
 
 ## Usage
@@ -38,12 +39,19 @@ You can set FIGlet fonts for H1–H3 per document using YAML frontmatter:
 h1_font: slant
 h2_font: standard
 h3_font: small
+margin_left: 4
+margin_right: 4
+paragraph_spacing: 1
+hyphenate: true
+hyphen_lang: en_US
 ---
 
 # Main Title
 ## Section Heading
 ### Subsection
 ```
+
+Font names also accept the special keywords `caps` (force uppercase) and `title` (title case) for any heading. `margin_left` and `margin_right` add leading/trailing spaces to body text, `paragraph_spacing` (or `lines_between_paragraphs`) inserts blank lines between paragraphs, and enabling `hyphenate` activates PyHyphen-based wrapping (optional `hyphen_lang` defaults to `en_US`).
 
 If the rendered FIGlet text would exceed the configured width, the converter automatically falls back to the H4-style uppercase heading with a dashed underline.
 

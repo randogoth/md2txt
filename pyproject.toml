@@ -6,4 +6,5 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "pyfiglet>=0.8.0",
+    "pyphen>=0.17.2",
 ]

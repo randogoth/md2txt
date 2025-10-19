@@ -1,1 +1,2 @@
+pyphen>=0.17.2
 pyfiglet>=0.8.0

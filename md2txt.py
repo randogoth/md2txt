@@ -6,11 +6,37 @@ from __future__ import annotations
 
 import argparse
 import re
+import string
 import sys
 import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
+
+try:  # pragma: no cover - optional dependency
+    from hyphen import Hyphenator as _Hyphenator  # type: ignore
+except ImportError:  # pragma: no cover - handled at runtime
+    _Hyphenator = None  # type: ignore[misc]
+
+if _Hyphenator is not None:  # pragma: no branch
+    Hyphenator = _Hyphenator  # type: ignore[assignment]
+else:  # pragma: no cover - fallback path
+    try:
+        import pyphen
+    except ImportError:  # pragma: no cover - handled at runtime
+        Hyphenator = None  # type: ignore[misc, assignment]
+    else:
+        class _PyphenWrapper:
+            def __init__(self, lang: str) -> None:
+                self._dic = pyphen.Pyphen(lang=lang)
+
+            def hyphenate_word(self, word: str):  # type: ignore[override]
+                inserted = self._dic.inserted(word)
+                if not inserted:
+                    return []
+                return inserted.split("-")
+
+        Hyphenator = _PyphenWrapper  # type: ignore[assignment]
 
 try:
     from pyfiglet import Figlet, FontNotFound
@@ -30,6 +56,29 @@ PARA_OPEN_RE = re.compile(r"^\s*<p\b([^>]*)>\s*$", re.IGNORECASE)
 PARA_CLOSE_RE = re.compile(r"^\s*</p>\s*$", re.IGNORECASE)
 MMD_ATTR_LINE_RE = re.compile(r"^\{\s*:(.+)\}\s*$")
 MMD_ATTR_TAIL_RE = re.compile(r"(.*?)\s*\{\s*:(.+?)\}\s*$")
+
+
+def _parse_int(value: Optional[str], default: int = 0) -> int:
+    if value is None:
+        return default
+    match = re.search(r"-?\d+", value)
+    if not match:
+        return default
+    try:
+        return int(match.group())
+    except ValueError:
+        return default
+
+
+def _parse_bool(value: Optional[str], default: bool = False) -> bool:
+    if value is None:
+        return default
+    lowered = value.strip().lower()
+    if lowered in {"true", "yes", "1", "on"}:
+        return True
+    if lowered in {"false", "no", "0", "off"}:
+        return False
+    return default
 
 
 @dataclass
@@ -59,6 +108,11 @@ class FrontMatter:
     h1_font: str = "standard"
     h2_font: str = "standard"
     h3_font: str = "standard"
+    margin_left: int = 0
+    margin_right: int = 0
+    paragraph_spacing: int = 0
+    hyphenate: bool = False
+    hyphen_lang: str = "en_US"
 
 
 class MarkdownToTxtConverter:
@@ -68,7 +122,22 @@ class MarkdownToTxtConverter:
         self.links: List[Tuple[int, str]] = []
         self.link_indices: Dict[str, int] = {}
         self.figlets: Dict[str, Figlet] = {}
-        self._style_stack: List[BlockStyle] = [BlockStyle()]
+        self._base_margin_left = max(0, self.frontmatter.margin_left)
+        self._base_margin_right = max(0, self.frontmatter.margin_right)
+        self.paragraph_spacing = max(0, self.frontmatter.paragraph_spacing)
+        self.hyphenate = self.frontmatter.hyphenate
+        self.hyphen_lang = self.frontmatter.hyphen_lang or "en_US"
+        self.hyphenator: Optional[Hyphenator]
+        if self.hyphenate:
+            if Hyphenator is None:
+                raise RuntimeError("PyHyphen is required for hyphenation but is not installed.")
+            try:
+                self.hyphenator = Hyphenator(self.hyphen_lang)
+            except Exception as exc:  # pragma: no cover - defensive
+                raise RuntimeError(f"Failed to initialise hyphenator for language '{self.hyphen_lang}': {exc}") from exc
+        else:
+            self.hyphenator = None
+        self._style_stack: List[BlockStyle] = [self._make_base_style()]
         self._paragraph_style_spec: Optional[StyleSpec] = None
         self._pending_block_style_spec: Optional[StyleSpec] = None
         self._last_stylable_block: Optional[BlockRecord] = None
@@ -77,7 +146,7 @@ class MarkdownToTxtConverter:
         output: List[str] = []
         self.links = []
         self.link_indices = {}
-        self._style_stack = [BlockStyle()]
+        self._style_stack = [self._make_base_style()]
         self._paragraph_style_spec = None
         self._pending_block_style_spec = None
         self._last_stylable_block = None
@@ -199,7 +268,8 @@ class MarkdownToTxtConverter:
 
             if not line.strip():
                 self._flush_paragraph(current_paragraph, output)
-                output.append("")
+                if self.paragraph_spacing == 0:
+                    output.append("")
                 current_paragraph = []
                 continue
 
@@ -216,7 +286,14 @@ class MarkdownToTxtConverter:
                 output.append("")
             for index, url in self.links:
                 entry = f"[{index}] {url}"
-                output.extend(self._wrap_text(entry, initial_indent="", subsequent_indent="", style=BlockStyle()))
+                output.extend(
+                    self._wrap_text(
+                        entry,
+                        initial_indent="",
+                        subsequent_indent="",
+                        style=self._make_base_style(),
+                    )
+                )
             self._last_stylable_block = None
 
         return output
@@ -230,10 +307,12 @@ class MarkdownToTxtConverter:
         style = self._combine_styles(self._current_style(), combined_spec)
 
         def render(target_style: BlockStyle) -> List[str]:
-            return self._wrap_text(processed, style=target_style)
+            return self._wrap_text(processed, style=target_style, hyphenate=self.hyphenate)
 
         lines = render(style)
         self._emit_block(output, lines, stylable=True, render_fn=render, style=style)
+        if self.paragraph_spacing > 0:
+            output.extend([ "" for _ in range(self.paragraph_spacing) ])
         paragraph_lines.clear()
         self._paragraph_style_spec = None
         self._pending_block_style_spec = None
@@ -264,6 +343,7 @@ class MarkdownToTxtConverter:
             initial_indent=indent,
             subsequent_indent=indent,
             style=self._current_style(),
+            hyphenate=self.hyphenate,
         )
         self._emit_block(output, wrapped)
 
@@ -327,6 +407,7 @@ class MarkdownToTxtConverter:
             initial_indent=prefix,
             subsequent_indent=" " * len(prefix),
             style=self._current_style(),
+            hyphenate=self.hyphenate,
         )
         self._emit_block(output, wrapped)
 
@@ -358,6 +439,13 @@ class MarkdownToTxtConverter:
         output[start:end] = new_lines
         self._last_stylable_block.length = len(new_lines)
         self._last_stylable_block.style = new_style
+
+    def _make_base_style(self) -> BlockStyle:
+        return BlockStyle(
+            align="left",
+            margin_left=self._base_margin_left,
+            margin_right=self._base_margin_right,
+        )
 
     def _current_style(self) -> BlockStyle:
         return self._style_stack[-1]
@@ -588,6 +676,10 @@ class MarkdownToTxtConverter:
         return clean_text, spec
 
     def _render_heading_lines(self, level: int, text: str, style: BlockStyle) -> List[str]:
+        font_name = getattr(self.frontmatter, f"h{level}_font", "standard")
+        style_key = font_name.lower()
+        if style_key in {"caps", "title"}:
+            return self._render_h4_plus(text, style, transform=style_key)
         if level <= 3:
             figlet_lines = self._figlet_render(level, text)
             if figlet_lines:
@@ -608,22 +700,23 @@ class MarkdownToTxtConverter:
         margin_left = min(max(style.margin_left, 0), self.width - 1)
         margin_right = max(style.margin_right, 0)
         available_width = max(1, self.width - margin_left - margin_right)
+        block_width = max((len(line.rstrip()) for line in lines), default=0)
+        block_width = min(block_width, available_width)
+        extra_space = max(0, available_width - block_width)
+        if style.align == "center":
+            align_offset = extra_space // 2
+        elif style.align == "right":
+            align_offset = extra_space
+        else:
+            align_offset = 0
+        max_indent = max(0, self.width - block_width)
+        indent = min(margin_left + align_offset, max_indent)
         result: List[str] = []
         for line in lines:
             if not line:
                 result.append("")
                 continue
             trimmed = line.rstrip()
-            line_len = len(trimmed)
-            extra_space = max(0, available_width - line_len)
-            if style.align == "center":
-                extra_left = extra_space // 2
-            elif style.align == "right":
-                extra_left = extra_space
-            else:
-                extra_left = 0
-            max_indent = max(0, self.width - line_len)
-            indent = min(margin_left + extra_left, max_indent)
             result.append(" " * indent + trimmed)
         return result
 
@@ -834,9 +927,14 @@ class MarkdownToTxtConverter:
             return None
         return [line.rstrip() for line in trimmed_lines]
 
-    def _render_h4_plus(self, text: str, style: BlockStyle) -> List[str]:
-        uppercase = text.upper()
-        wrapped = self._wrap_text(uppercase, style=style)
+    def _render_h4_plus(self, text: str, style: BlockStyle, transform: str = "caps") -> List[str]:
+        if transform == "title":
+            processed = self._to_title_case(text)
+        elif transform == "caps":
+            processed = text.upper()
+        else:
+            processed = text
+        wrapped = self._wrap_text(processed, style=style)
         output: List[str] = []
         for line in wrapped:
             line = line.rstrip()
@@ -850,18 +948,32 @@ class MarkdownToTxtConverter:
         output.append("")
         return output
 
+    def _to_title_case(self, value: str) -> str:
+        return string.capwords(value)
+
     def _wrap_text(
         self,
         text: str,
         initial_indent: str = "",
         subsequent_indent: Optional[str] = None,
         style: Optional[BlockStyle] = None,
+        hyphenate: bool = False,
     ) -> List[str]:
         style = style or BlockStyle()
         margin_left = min(max(style.margin_left, 0), self.width - 1)
         available_width = max(1, self._effective_width(style))
 
         subsequent = initial_indent if subsequent_indent is None else subsequent_indent
+
+        if hyphenate and self.hyphenator is not None:
+            return self._wrap_text_hyphenated(
+                text,
+                initial_indent,
+                subsequent,
+                style,
+                available_width,
+            )
+
         wrapper = textwrap.TextWrapper(
             width=available_width,
             expand_tabs=False,
@@ -891,6 +1003,135 @@ class MarkdownToTxtConverter:
             result.append(" " * indent + line)
         return result
 
+    def _wrap_text_hyphenated(
+        self,
+        text: str,
+        initial_indent: str,
+        subsequent_indent: str,
+        style: BlockStyle,
+        available_width: int,
+    ) -> List[str]:
+        tokens = re.split(r"(\s+)", text)
+        lines: List[str] = []
+        current_indent = initial_indent
+        current_line = initial_indent
+        current_len = len(current_line)
+        width = available_width
+        for index, token in enumerate(tokens):
+            if token == "":
+                continue
+            if token.isspace():
+                if current_len + len(token) > width and current_len > len(current_indent):
+                    lines.append(current_line.rstrip())
+                    current_indent = subsequent_indent
+                    current_line = subsequent_indent
+                    current_len = len(current_line)
+                else:
+                    current_line += token
+                    current_len += len(token)
+                continue
+            segments = self._hyphenate_token(token) or [token]
+            while segments:
+                remaining = width - current_len
+                if remaining <= 1:
+                    lines.append(current_line.rstrip())
+                    current_indent = subsequent_indent
+                    current_line = subsequent_indent
+                    current_len = len(current_line)
+                    continue
+
+                joined_length = sum(len(part) for part in segments)
+                if current_len + joined_length <= width:
+                    current_line += "".join(segments)
+                    current_len += joined_length
+                    segments = []
+                    break
+
+                split_index = None
+                running = 0
+                for idx in range(1, len(segments)):
+                    running += len(segments[idx - 1])
+                    needed = running + 1  # hyphen
+                    if current_len + needed <= width:
+                        split_index = idx
+                    else:
+                        break
+
+                if split_index is None:
+                    # fallback: break the first segment
+                    fragment = segments[0]
+                    force_split = min(len(fragment), remaining - 1)
+                    if force_split <= 0:
+                        lines.append(current_line.rstrip())
+                        current_indent = subsequent_indent
+                        current_line = subsequent_indent
+                        current_len = len(current_line)
+                        continue
+                    head = fragment[:force_split] + "-"
+                    tail = fragment[force_split:]
+                    current_line += head
+                    lines.append(current_line.rstrip())
+                    current_indent = subsequent_indent
+                    current_line = subsequent_indent
+                    current_len = len(current_line)
+                    segments[0] = tail
+                    if not tail:
+                        segments.pop(0)
+                    continue
+
+                consumed_segments = segments[:split_index]
+                current_line += "".join(consumed_segments) + "-"
+                current_len += sum(len(part) for part in consumed_segments) + 1
+                segments = segments[split_index:]
+                lines.append(current_line.rstrip())
+                current_indent = subsequent_indent
+                current_line = subsequent_indent
+                current_len = len(current_line)
+        if current_line.strip():
+            lines.append(current_line.rstrip())
+        if not lines:
+            lines.append(initial_indent.rstrip())
+
+        result: List[str] = []
+        margin_left = min(max(style.margin_left, 0), self.width - 1)
+        width = available_width
+        for line in lines:
+            stripped = line.rstrip()
+            line_len = len(stripped)
+            extra_space = max(0, width - line_len)
+            if style.align == "center":
+                extra_left = extra_space // 2
+            elif style.align == "right":
+                extra_left = extra_space
+            else:
+                extra_left = 0
+            max_indent = max(0, self.width - line_len)
+            indent = min(margin_left + extra_left, max_indent)
+            result.append(" " * indent + stripped)
+        return result
+
+    def _hyphenate_token(self, token: str) -> Optional[List[str]]:
+        if self.hyphenator is None:
+            return None
+        match = re.match(r"^([^A-Za-zÀ-ÖØ-öø-ÿ'’]*)([A-Za-zÀ-ÖØ-öø-ÿ'’]+)([^A-Za-zÀ-ÖØ-öø-ÿ'’]*)$", token)
+        if not match:
+            return None
+        leading, word, trailing = match.groups()
+        if len(word) <= 4:
+            return None
+        parts = self.hyphenator.hyphenate_word(word)
+        if not parts:
+            return None
+        if isinstance(parts, str):
+            segments = [segment for segment in parts.split("-") if segment]
+        else:
+            segments = [segment for segment in parts if segment]
+        if len(segments) < 2:
+            return None
+        segments[0] = leading + segments[0]
+        segments[-1] = segments[-1] + trailing
+        return segments
+
     def _effective_width(self, style: BlockStyle) -> int:
         margin_left = min(max(style.margin_left, 0), self.width - 1)
         remaining = self.width - margin_left
@@ -913,10 +1154,20 @@ def parse_frontmatter(lines: List[str]) -> Tuple[FrontMatter, List[str]]:
     if idx >= len(lines):
         return FrontMatter(), lines
     remaining = lines[idx + 1 :] if idx + 1 < len(lines) else []
+    paragraph_spacing_value = frontmatter.get("paragraph_spacing")
+    if paragraph_spacing_value is None:
+        paragraph_spacing_value = frontmatter.get("lines_between_paragraphs")
+    if paragraph_spacing_value is None:
+        paragraph_spacing_value = frontmatter.get("paragraph_lines")
     fm = FrontMatter(
-        h1_font=frontmatter.get("h1_font", "standard"),
-        h2_font=frontmatter.get("h2_font", "standard"),
-        h3_font=frontmatter.get("h3_font", "standard"),
+        h1_font=frontmatter.get("h1_font", "standard").strip() or "standard",
+        h2_font=frontmatter.get("h2_font", "standard").strip() or "standard",
+        h3_font=frontmatter.get("h3_font", "standard").strip() or "standard",
+        margin_left=_parse_int(frontmatter.get("margin_left"), 0),
+        margin_right=_parse_int(frontmatter.get("margin_right"), 0),
+        paragraph_spacing=max(0, _parse_int(paragraph_spacing_value, 0)),
+        hyphenate=_parse_bool(frontmatter.get("hyphenate"), False),
+        hyphen_lang=(frontmatter.get("hyphen_lang") or "en_US").strip() or "en_US",
     )
     return fm, remaining
 
