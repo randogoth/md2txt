@@ -113,6 +113,7 @@ class FrontMatter:
     paragraph_spacing: int = 0
     hyphenate: bool = False
     hyphen_lang: str = "en_US"
+    figlet_fallback: bool = False
 
 
 class MarkdownToTxtConverter:
@@ -127,6 +128,7 @@ class MarkdownToTxtConverter:
         self.paragraph_spacing = max(0, self.frontmatter.paragraph_spacing)
         self.hyphenate = self.frontmatter.hyphenate
         self.hyphen_lang = self.frontmatter.hyphen_lang or "en_US"
+        self.figlet_fallback = self.frontmatter.figlet_fallback
         self.hyphenator: Optional[Hyphenator]
         if self.hyphenate:
             if Hyphenator is None:
@@ -322,9 +324,11 @@ class MarkdownToTxtConverter:
             return []
         width = max(2, len(str(len(code_lines))))
         formatted: List[str] = []
+        style = self._current_style()
+        margin_indent = " " * max(0, style.margin_left)
         for idx, line in enumerate(code_lines, start=1):
-            formatted.append(f" {idx:0{width}d} | {line}")
-        formatted.append("")
+            formatted.append(f"{margin_indent}{idx:0{width}d} | {line}")
+        formatted.append(margin_indent if margin_indent else "")
         return formatted
 
     def _handle_blockquote(self, line: str, output: List[str]) -> None:
@@ -681,13 +685,59 @@ class MarkdownToTxtConverter:
         if style_key in {"caps", "title"}:
             return self._render_h4_plus(text, style, transform=style_key)
         if level <= 3:
-            figlet_lines = self._figlet_render(level, text)
-            if figlet_lines:
-                max_figlet_width = max((len(line.rstrip()) for line in figlet_lines), default=0)
-                if max_figlet_width <= self._effective_width(style):
-                    styled = self._apply_style_to_lines(figlet_lines, style)
-                    return styled + [""]
+            figlet_lines = self._render_figlet_heading(level, text, style)
+            if figlet_lines is not None:
+                return figlet_lines + [""]
         return self._render_h4_plus(text, style)
+
+    def _render_figlet_heading(self, level: int, text: str, style: BlockStyle) -> Optional[List[str]]:
+        if Figlet is None:
+            return None
+        font_name = getattr(self.frontmatter, f"h{level}_font", "standard")
+        cache_key = (font_name, "wide")
+        figlet = self.figlets.get(cache_key)
+        if figlet is None:
+            try:
+                figlet = Figlet(font=font_name, width=max(self.width, 100000))
+            except (FontNotFound, TypeError):
+                return None
+            self.figlets[cache_key] = figlet
+
+        words = text.split()
+        if not words:
+            return []
+
+        available_width = self._effective_width(style)
+        justify = self._figlet_justify(style.align)
+
+        render_key = (font_name, available_width, justify)
+        render_figlet = self.figlets.get(render_key)
+        if render_figlet is None:
+            try:
+                render_figlet = Figlet(font=font_name, width=available_width, justify=justify)
+            except (FontNotFound, TypeError):
+                return None
+            self.figlets[render_key] = render_figlet
+
+        rendered = render_figlet.renderText(text).rstrip("\n").splitlines()
+        if not rendered:
+            return []
+
+        lines = [line.rstrip("\n") for line in rendered]
+        overflow_detected = any(len(line.rstrip()) > available_width for line in lines)
+        if overflow_detected and self.figlet_fallback:
+            return None
+
+        margin_left = min(max(style.margin_left, 0), self.width - 1)
+        indent_str = " " * margin_left
+        return [indent_str + line.rstrip() for line in lines]
+
+    def _figlet_justify(self, align: str) -> str:
+        if align == "center":
+            return "center"
+        if align == "right":
+            return "right"
+        return "left"
 
     def _render_horizontal_rule(self, style: BlockStyle) -> str:
         margin_left = min(max(style.margin_left, 0), self.width - 1)
@@ -920,7 +970,7 @@ class MarkdownToTxtConverter:
         self.link_indices[url] = index
         return index
 
-    def _figlet_render(self, level: int, text: str) -> Optional[List[str]]:
+    def _figlet_render(self, level: int, text: str, allow_overflow: bool = False) -> Optional[List[str]]:
         if Figlet is None:
             return None
         font_name = getattr(self.frontmatter, f"h{level}_font", "standard")
@@ -934,9 +984,43 @@ class MarkdownToTxtConverter:
         rendered = figlet.renderText(text).rstrip("\n")
         lines = rendered.splitlines()
         trimmed_lines = [line.rstrip("\n") for line in lines]
-        if not trimmed_lines or max(len(line.rstrip()) for line in trimmed_lines) > self.width:
+        if not trimmed_lines:
+            return None
+        if not allow_overflow and max(len(line.rstrip()) for line in trimmed_lines) > self.width:
             return None
         return [line.rstrip() for line in trimmed_lines]
+
+    def _align_figlet_block(self, lines: List[str], style: BlockStyle) -> List[str]:
+        margin_left = min(max(style.margin_left, 0), self.width - 1)
+        margin_right = max(style.margin_right, 0)
+        available_width = max(1, self.width - margin_left - margin_right)
+
+        raw = [line.rstrip() for line in lines]
+        non_empty = [line for line in raw if line.strip()]
+        if non_empty:
+            leading = min(len(line) - len(line.lstrip(" ")) for line in non_empty)
+        else:
+            leading = 0
+        stripped = [line[leading:] if line.strip() else "" for line in raw]
+        block_width = max((len(line) for line in stripped if line.strip()), default=0)
+        extra_space = max(0, available_width - block_width)
+        if style.align == "center":
+            align_offset = extra_space // 2
+        elif style.align == "right":
+            align_offset = extra_space
+        else:
+            align_offset = 0
+        max_indent = max(0, self.width - block_width)
+        indent = min(margin_left + align_offset, max_indent)
+        indent_str = " " * indent
+
+        aligned: List[str] = []
+        for line in stripped:
+            if not line.strip():
+                aligned.append("")
+                continue
+            aligned.append(indent_str + line)
+        return aligned
 
     def _render_h4_plus(self, text: str, style: BlockStyle, transform: str = "caps") -> List[str]:
         if transform == "title":
@@ -1179,6 +1263,7 @@ def parse_frontmatter(lines: List[str]) -> Tuple[FrontMatter, List[str]]:
         paragraph_spacing=max(0, _parse_int(paragraph_spacing_value, 0)),
         hyphenate=_parse_bool(frontmatter.get("hyphenate"), False),
         hyphen_lang=(frontmatter.get("hyphen_lang") or "en_US").strip() or "en_US",
+        figlet_fallback=_parse_bool(frontmatter.get("figlet_fallback"), False),
     )
     return fm, remaining
 

@@ -2,6 +2,8 @@
 h1_font: big
 h2_font: small
 h3_font: caps
+margin_left: 8
+margin_right: 8
 paragraph_spacing: 2
 hyphenate: true
 ---
