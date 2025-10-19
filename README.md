@@ -50,7 +50,7 @@ hyphen_lang: en_US
 ### Subsection
 ```
 
-Font names also accept the special keywords `caps` (force uppercase) and `title` (title case) for any heading. `margin_left` and `margin_right` add leading/trailing spaces to body text, `paragraph_spacing` (or `lines_between_paragraphs`) inserts blank lines between paragraphs, and enabling `hyphenate` activates PyHyphen-based wrapping (optional `hyphen_lang` defaults to `en_US`). Set `figlet_fallback: true` to force an H4-style fallback when a FIGlet banner would overflow; when omitted (the default), the banner is kept even if it extends beyond the width.
+Font names also accept the special keywords `caps` (force uppercase) and `title` (title case) for any heading. `margin_left` and `margin_right` add leading/trailing spaces to body text, `paragraph_spacing` (or `lines_between_paragraphs`) inserts blank lines between paragraphs, enabling `hyphenate` activates PyHyphen-based wrapping (optional `hyphen_lang` defaults to `en_US`), and `header_spacing` controls how many blank lines precede headings (default `2`). Set `figlet_fallback: true` to force an H4-style fallback when a FIGlet banner would overflow; when omitted (the default), the banner is kept even if it extends beyond the width.
 
 ## Styling via Attribute Blocks
 

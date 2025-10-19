@@ -105,15 +105,16 @@ class BlockRecord:
 
 @dataclass
 class FrontMatter:
-    h1_font: str = "standard"
-    h2_font: str = "standard"
-    h3_font: str = "standard"
-    margin_left: int = 0
-    margin_right: int = 0
-    paragraph_spacing: int = 0
+    h1_font: str = "small"
+    h2_font: str = "caps"
+    h3_font: str = "title"
+    margin_left: int = 2
+    margin_right: int = 2
+    paragraph_spacing: int = 2
     hyphenate: bool = False
     hyphen_lang: str = "en_US"
     figlet_fallback: bool = False
+    header_spacing: int = 2
 
 
 class MarkdownToTxtConverter:
@@ -129,6 +130,7 @@ class MarkdownToTxtConverter:
         self.hyphenate = self.frontmatter.hyphenate
         self.hyphen_lang = self.frontmatter.hyphen_lang or "en_US"
         self.figlet_fallback = self.frontmatter.figlet_fallback
+        self.header_spacing = max(0, self.frontmatter.header_spacing)
         self.hyphenator: Optional[Hyphenator]
         if self.hyphenate:
             if Hyphenator is None:
@@ -242,6 +244,8 @@ class MarkdownToTxtConverter:
                 current_paragraph = []
                 level = len(heading_match.group(1))
                 heading_text = heading_match.group(2).strip()
+                if output and self.header_spacing > 0:
+                    self._ensure_header_spacing(output)
                 heading_text, inline_spec = self._extract_trailing_attr(heading_text)
                 combined_spec = self._merge_specs(self._pending_block_style_spec, inline_spec)
                 style = self._combine_styles(self._current_style(), combined_spec)
@@ -781,6 +785,19 @@ class MarkdownToTxtConverter:
         flush_block()
         return result
 
+    def _ensure_header_spacing(self, output: List[str]) -> None:
+        if self.header_spacing <= 0:
+            return
+        existing = 0
+        for line in reversed(output):
+            if line.strip() == "":
+                existing += 1
+                if existing >= self.header_spacing:
+                    return
+            else:
+                break
+        output.extend([""] * (self.header_spacing - existing))
+
     def _process_inline(self, text: str) -> str:
         code_segments: List[str] = []
 
@@ -1264,6 +1281,7 @@ def parse_frontmatter(lines: List[str]) -> Tuple[FrontMatter, List[str]]:
         hyphenate=_parse_bool(frontmatter.get("hyphenate"), False),
         hyphen_lang=(frontmatter.get("hyphen_lang") or "en_US").strip() or "en_US",
         figlet_fallback=_parse_bool(frontmatter.get("figlet_fallback"), False),
+        header_spacing=max(0, _parse_int(frontmatter.get("header_spacing"), 2)),
     )
     return fm, remaining
 
