@@ -32,6 +32,7 @@ populifer adeunt quicquam cum **ales** Ixion angulus placet reddere.
 {:.right}
 
 ## Tractaque serpens arva quoque
+{:.center}
 
 Inprudens dum memor alma, casses dedi Sinuessa iam quid adicit
 `gate_truncate_wave`. [Geratur de](#salientia-iungit-contra-et), insolida
@@ -43,6 +44,7 @@ nervi famem. Cura pars natique velleris semel et at `printerWildcardParallel`
 inquit positosque comites ultra.
 
 ## Quantaque augent
+{:.center}
 
 Acuti ignotis ignis, ostendit nostras terras nondum, [petit utque
 utero](#structa-hinc-vetitus-factum) sepulcrales, pluma reseratis Ismario. Tria
@@ -69,6 +71,7 @@ sedisti](#mille-parva).
 ```
 
 ### Mille parva
+{:.center}
 
 **Minetur et** aurum! Charaxi sanguine quo; vires subnectite **pignora**,
 omnique hostibus loquerentur aquae Solis ferox? **Cum ne**, putat utar ex ad

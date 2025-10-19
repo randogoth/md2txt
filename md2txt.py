@@ -700,24 +700,35 @@ class MarkdownToTxtConverter:
         margin_left = min(max(style.margin_left, 0), self.width - 1)
         margin_right = max(style.margin_right, 0)
         available_width = max(1, self.width - margin_left - margin_right)
-        block_width = max((len(line.rstrip()) for line in lines), default=0)
-        block_width = min(block_width, available_width)
-        extra_space = max(0, available_width - block_width)
-        if style.align == "center":
-            align_offset = extra_space // 2
-        elif style.align == "right":
-            align_offset = extra_space
-        else:
-            align_offset = 0
-        max_indent = max(0, self.width - block_width)
-        indent = min(margin_left + align_offset, max_indent)
         result: List[str] = []
+        block: List[str] = []
+
+        def flush_block() -> None:
+            if not block:
+                return
+            trimmed = [entry.rstrip("\n").rstrip() for entry in block]
+            block_width = max((len(line) for line in trimmed), default=0)
+            extra_space = max(0, available_width - block_width)
+            if style.align == "center":
+                align_offset = extra_space // 2
+            elif style.align == "right":
+                align_offset = extra_space
+            else:
+                align_offset = 0
+            max_indent = max(0, self.width - block_width)
+            indent = min(margin_left + align_offset, max_indent)
+            indent_str = " " * indent
+            for line in trimmed:
+                result.append(indent_str + line)
+            block.clear()
+
         for line in lines:
-            if not line:
+            if line.strip():
+                block.append(line)
+            else:
+                flush_block()
                 result.append("")
-                continue
-            trimmed = line.rstrip()
-            result.append(" " * indent + trimmed)
+        flush_block()
         return result
 
     def _process_inline(self, text: str) -> str:
