@@ -144,3 +144,8 @@ register_renderer("ansi", my_renderer_factory)
 Once registered (for example in a small module that imports `md2txt.cli`), the new plugins are available via `--parser my-markdown` or `--renderer ansi`. The CLI lists registered plugin names in `--help`, and the helper functions `available_parsers()` / `available_renderers()` return the sorted names if you need to build higher-level tooling.
 
 The shared preprocessing helpers—YAML frontmatter parsing, recursive include expansion, and ASCII art sentinels—also live in `src/md2txt/conversion/core.py`, allowing alternate front-ends to reuse exactly the same behaviour without duplicating code.
+
+---
+
+* Directed and vibe coded by Tobias Raayoni Last
+* Programming by gpt-5-codex
