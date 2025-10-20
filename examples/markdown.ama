@@ -7,10 +7,10 @@
                                      |___/         /_/
 
 
-%h h2 Heading
+  %h h2 Heading
 
 
-%h h3 Heading
+  %h h3 Heading
 
 
    _     _  _     _   _                _ _
@@ -37,7 +37,7 @@
                                                 |___/
 
 
-%h Horizontal Rules
+  %h Horizontal Rules
 
 
   --------------------------------------------------------------------------
@@ -47,7 +47,7 @@
   --------------------------------------------------------------------------
 
 
-%h Emphasis
+  %h Emphasis
 
 
   %!THIS IS BOLD TEXT%t %bTHIS IS BOLD TEXT%t %!This is italic text%t %bThis
@@ -55,7 +55,7 @@
 
 
 
-%h Blockquotes
+  %h Blockquotes
 
 
      Blockquotes can also be nested...
@@ -63,10 +63,10 @@
            or with spaces between arrows.
 
 
-%h Lists
+  %h Lists
 
 
-%h Unordered
+  %h Unordered
 
 
   + Create a list by starting a line with `=+`=, `=-`=, or `=*`=
@@ -77,7 +77,7 @@
   + Very easy
 
 
-%h Ordered
+  %h Ordered
 
 
   1. Lorem ipsum dolor sit amet
@@ -85,7 +85,7 @@
   3. Integer molestie lorem at massa
 
 
-%h Code
+  %h Code
 
 
   Inline `=code`=
@@ -125,7 +125,7 @@
      `=
 
 
-%h Links
+  %h Links
 
 
   link text (<http://dev.nodeca.com>)
@@ -136,7 +136,7 @@
 
 
 
-%h Images
+  %h Images
 
 
   Minion (<https://octodex.github.com/images/minion.png>) Stormtroopocat

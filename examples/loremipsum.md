@@ -39,7 +39,7 @@ populifer adeunt quicquam cum **ales** Ixion angulus placet reddere.
 ## Tractaque serpens arva quoque
 {:.center}
 
-![[markdown.md]]
+#[dragon :center](dragon.txt)
 
 Inprudens dum memor alma, casses dedi Sinuessa iam quid adicit
 `gate_truncate_wave`. [Geratur de](#salientia-iungit-contra-et), insolida

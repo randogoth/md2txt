@@ -7,10 +7,10 @@
                                      |___/         /_/
 
 
->> h2 Heading
+  >> h2 Heading
 
 
->>> h3 Heading
+  >>> h3 Heading
 
 
    _     _  _     _   _                _ _
@@ -37,20 +37,20 @@
                                                 |___/
 
 
->> Horizontal Rules
+  >> Horizontal Rules
 
   ----------------------------------------------------------------------------
   ----------------------------------------------------------------------------
   ----------------------------------------------------------------------------
 
 
->> Emphasis
+  >> Emphasis
 
   `!This is bold text`! `!This is bold text`! `*This is italic text`* `*This
   is italic text`* ~~Strikethrough~~
 
 
->> Blockquotes
+  >> Blockquotes
 
   >>>>Blockquotes can also be nested...
 
@@ -59,10 +59,10 @@
   >>>>>>>>>>>>or with spaces between arrows.
 
 
->> Lists
+  >> Lists
 
 
->>> Unordered
+  >>> Unordered
 
   + Create a list by starting a line with `=+`=, `=-`=, or `=*`=
   - Marker character change forces new list start:
@@ -72,14 +72,14 @@
   + Very easy
 
 
->>> Ordered
+  >>> Ordered
 
   1. Lorem ipsum dolor sit amet
   2. Consectetur adipiscing elit
   3. Integer molestie lorem at massa
 
 
->> Code
+  >> Code
 
   Inline `=code`=
 
@@ -113,7 +113,7 @@
   `=
 
 
->> Links
+  >> Links
 
   `[link text`http://dev.nodeca.com]
 
@@ -121,7 +121,7 @@
   `[link with title`http://nodeca.github.io/pica/demo/ "title text!"]
 
 
->> Images
+  >> Images
 
   `[Minion`https://octodex.github.com/images/minion.png]
   `[Stormtroopocat`https://octodex.github.com/images/stormtroopocat.jpg "The

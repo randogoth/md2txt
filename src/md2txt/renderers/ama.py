@@ -50,12 +50,22 @@ class AmaRenderer(TextRenderer):
 
     def _render_heading(self, payload: HeadingPayload, style: BlockStyle) -> None:
         self._ensure_header_spacing()
-        figlet = self._render_figlet_heading(payload.level, payload.text, style)
-        if figlet and all(len(line.rstrip()) <= self.width for line in figlet):
-            self._emit_block(figlet, stylable=False)
-            return
-        heading = self._process_inline(payload.text)
-        self._emit_block([f"%h {heading}", ""], stylable=False)
+        def render_fn(target_style: BlockStyle) -> List[str]:
+            figlet = self._render_figlet_heading(payload.level, payload.text, target_style)
+            if figlet and all(len(line.rstrip()) <= self.width for line in figlet):
+                return [*figlet, ""]
+            heading = self._process_inline(payload.text)
+            wrapped = self._wrap_text(
+                heading,
+                style=target_style,
+                initial_indent="%h ",
+                subsequent_indent="%h ",
+            )
+            if not wrapped or wrapped[-1] != "":
+                wrapped.append("")
+            return wrapped
+
+        self._emit_block(render_fn(style), stylable=True, render_fn=render_fn, style=style)
 
     def _render_code_block(self, payload: CodeBlockPayload, style: BlockStyle) -> None:
         margin_left, _, _ = self._margins(style)
