@@ -95,6 +95,8 @@ def parse_frontmatter(lines: List[str]) -> Tuple[FrontMatter, List[str]]:
                 code_block_wrap_indent = default_wrap_indent if wrap_flag else 0
     code_block_line_numbers = _parse_bool(frontmatter.get("code_block_line_numbers"), True)
     blockquote_bars = _parse_bool(frontmatter.get("blockquote_bars"), True)
+    list_marker_indent = max(0, _parse_int(frontmatter.get("list_marker_indent"), 0))
+    list_text_spacing = max(0, _parse_int(frontmatter.get("list_text_spacing"), 1))
     fm = FrontMatter(
         h1_font=frontmatter.get("h1_font", "standard").strip() or "standard",
         h2_font=frontmatter.get("h2_font", "standard").strip() or "standard",
@@ -110,6 +112,8 @@ def parse_frontmatter(lines: List[str]) -> Tuple[FrontMatter, List[str]]:
         code_block_wrap_indent=code_block_wrap_indent,
         code_block_line_numbers=code_block_line_numbers,
         blockquote_bars=blockquote_bars,
+        list_marker_indent=list_marker_indent,
+        list_text_spacing=list_text_spacing,
     )
     return fm, remaining
 

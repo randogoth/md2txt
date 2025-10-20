@@ -8,6 +8,8 @@ paragraph_spacing: 2
 code_block_line_numbers: false
 code_block_wrap: 4
 blockquote_bars: false
+list_marker_indent: 2
+list_text_spacing: 3
 hyphenate: true
 ---
 
@@ -38,6 +40,21 @@ populifer adeunt quicquam cum **ales** Ixion angulus placet reddere.
 
 ## Tractaque serpens arva quoque
 {:.center}
+
+### Unordered
+
++ Create a list by starting a line with `+`, `-`, or `*`
+- Marker character change forces new list start:
+* Ac tristique libero volutpat at jesrh hjsrh sejr hhsjehv sjtrhg jrdth
++ Facilisis in pretium nisl aliquet
+- Nulla volutpat aliquam velit
++ Very easy
+
+### Ordered
+
+1. Lorem ipsum dolor sit amet
+2. Consectetur adipiscing elit
+3. Integer molestie lorem at massa
 
 Inprudens dum memor alma, casses dedi Sinuessa iam quid adicit
 `gate_truncate_wave`. [Geratur de](#salientia-iungit-contra-et), insolida

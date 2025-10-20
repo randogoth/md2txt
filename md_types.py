@@ -45,6 +45,8 @@ class FrontMatter:
     code_block_wrap_indent: int = 2
     code_block_line_numbers: bool = True
     blockquote_bars: bool = True
+    list_marker_indent: int = 0
+    list_text_spacing: int = 1
 
 
 @dataclass

@@ -79,6 +79,8 @@ class TextRenderer:
         self.wrap_code_blocks_indent = (
             max(0, frontmatter.code_block_wrap_indent) if self.wrap_code_blocks else 0
         )
+        self.list_marker_indent = max(0, frontmatter.list_marker_indent)
+        self.list_text_spacing = max(0, frontmatter.list_text_spacing)
         self._base_style = BlockStyle(
             align="left",
             margin_left=max(0, frontmatter.margin_left),
@@ -175,12 +177,17 @@ class TextRenderer:
         self._emit_block(wrapped, stylable=False)
 
     def _render_list_item(self, payload: ListItemPayload, style: BlockStyle) -> None:
-        prefix = f"{payload.indent}{payload.marker}{payload.spacing}"
+        base_indent = payload.indent.replace("\t", "    ")
+        marker_indent = " " * self.list_marker_indent
+        marker = payload.marker
+        text_spacing = " " * self.list_text_spacing
+        initial_indent = f"{base_indent}{marker_indent}{marker}{text_spacing}"
+        subsequent_indent = f"{base_indent}{marker_indent}{' ' * len(marker)}{text_spacing}"
         processed = self._process_inline(payload.text)
         wrapped = self._wrap_text(
             processed,
-            initial_indent=prefix,
-            subsequent_indent=" " * len(prefix),
+            initial_indent=initial_indent,
+            subsequent_indent=subsequent_indent,
             style=style,
             hyphenate=self.hyphenate,
         )
