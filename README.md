@@ -14,7 +14,7 @@ This repository contains the `md2txt` command line tool and supporting libraries
 Install the CLI directly from GitHub with [uv](https://github.com/astral-sh/uv): 
 
 ```
-uv tool install --from github:randogoth/md2txt md2txt
+uv tool install --from git+https://github.com/randogoth/md2txt/ md2txt
 ```
 
 ## CLI
