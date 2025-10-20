@@ -4,6 +4,7 @@ import re
 import string
 import textwrap
 from dataclasses import dataclass
+from functools import partial
 from typing import Callable, Dict, List, Optional, Tuple
 
 from md_types import (
@@ -54,6 +55,16 @@ except ImportError:  # pragma: no cover - emit a helpful error at runtime instea
     FontNotFound = ValueError  # type: ignore[assignment]
 
 
+CODE_STASH_RE = re.compile(r"`[^`]*`")
+STRIKETHROUGH_RE = re.compile(r"~~(.*?)~~")
+BOLD_RE = re.compile(r"\*\*(.*?)\*\*")
+ITALIC_RE = re.compile(r"(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)")
+UNDERLINE_STRONG_RE = re.compile(r"__(.*?)__")
+UNDERLINE_EM_RE = re.compile(r"(?<!_)_(?!_)(.*?)(?<!_)_(?!_)")
+IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+LINK_RE = re.compile(r"(?<!\!)\[([^\]]+)\]\(([^)]+)\)")
+
+
 @dataclass
 class BlockRecord:
     start: int
@@ -99,6 +110,16 @@ class TextRenderer:
                 raise RuntimeError(f"Failed to initialise hyphenator for language '{self.hyphen_lang}': {exc}") from exc
         else:
             self.hyphenator = None
+        self._handlers: Dict[BlockKind, Callable[[object, BlockStyle], None]] = {
+            BlockKind.PARAGRAPH: self._render_paragraph,
+            BlockKind.HEADING: self._render_heading,
+            BlockKind.CODE_BLOCK: self._render_code_block,
+            BlockKind.BLOCKQUOTE: self._render_blockquote,
+            BlockKind.LIST_ITEM: self._render_list_item,
+            BlockKind.HORIZONTAL_RULE: self._render_horizontal_rule,
+            BlockKind.BLANK_LINE: self._render_blank_line,
+            BlockKind.CUSTOM_BLOCK: self._render_custom_block,
+        }
 
     def handle_event(self, event: BlockEvent | StyleUpdateEvent) -> None:
         if isinstance(event, BlockEvent):
@@ -124,61 +145,37 @@ class TextRenderer:
         return self.output
 
     def _handle_block_event(self, event: BlockEvent) -> None:
-        if event.kind is BlockKind.PARAGRAPH:
-            self._render_paragraph(event.payload, event.style)
-        elif event.kind is BlockKind.HEADING:
-            self._render_heading(event.payload, event.style)
-        elif event.kind is BlockKind.CODE_BLOCK:
-            self._render_code_block(event.payload, event.style)
-        elif event.kind is BlockKind.BLOCKQUOTE:
-            self._render_blockquote(event.payload, event.style)
-        elif event.kind is BlockKind.LIST_ITEM:
-            self._render_list_item(event.payload, event.style)
-        elif event.kind is BlockKind.HORIZONTAL_RULE:
-            self._render_horizontal_rule(event.style)
-        elif event.kind is BlockKind.BLANK_LINE:
-            self._render_blank_line()
-        elif event.kind is BlockKind.CUSTOM_BLOCK:
-            self._render_custom_block(event.payload, event.style)
-        else:  # pragma: no cover - defensive default
+        handler = self._handlers.get(event.kind)
+        if handler:
+            handler(event.payload, event.style)
+        else:
             self._last_stylable_block = None
 
     def _render_paragraph(self, payload: ParagraphPayload, style: BlockStyle) -> None:
         processed = self._process_inline(payload.text)
-
-        def render(target_style: BlockStyle) -> List[str]:
-            return self._wrap_text(processed, style=target_style, hyphenate=self.hyphenate)
-
-        lines = render(style)
-        self._emit_block(lines, stylable=True, render_fn=render, style=style)
+        self._wrap_emit(processed, style, stylable=True, hyphenate=self.hyphenate)
         if self.paragraph_spacing > 0:
             self.output.extend([""] * self.paragraph_spacing)
 
     def _render_heading(self, payload: HeadingPayload, style: BlockStyle) -> None:
         self._ensure_header_spacing()
 
-        def render(target_style: BlockStyle) -> List[str]:
-            return self._render_heading_lines(payload.level, payload.text, target_style)
-
-        lines = render(style)
-        self._emit_block(lines, stylable=True, render_fn=render, style=style)
+        self._emit_render(partial(self._render_heading_lines, payload.level, payload.text), style, stylable=True)
 
     def _render_code_block(self, payload: CodeBlockPayload, style: BlockStyle) -> None:
-        lines = self._format_code_block(payload.lines, style)
-        self._emit_block(lines, stylable=False)
+        self._emit_render(partial(self._format_code_block, payload.lines), style)
 
     def _render_blockquote(self, payload: BlockQuotePayload, style: BlockStyle) -> None:
         processed = self._process_inline(payload.text)
         indent_unit = " | " if self.blockquote_bars else "   "
         indent = indent_unit * max(1, payload.depth)
-        wrapped = self._wrap_text(
+        self._wrap_emit(
             processed,
+            style,
             initial_indent=indent,
             subsequent_indent=indent,
-            style=style,
             hyphenate=self.hyphenate,
         )
-        self._emit_block(wrapped, stylable=False)
 
     def _render_list_item(self, payload: ListItemPayload, style: BlockStyle) -> None:
         base_indent = payload.indent.replace("\t", "    ")
@@ -188,30 +185,25 @@ class TextRenderer:
         initial_indent = f"{base_indent}{marker_indent}{marker}{text_spacing}"
         subsequent_indent = f"{base_indent}{marker_indent}{' ' * len(marker)}{text_spacing}"
         processed = self._process_inline(payload.text)
-        wrapped = self._wrap_text(
+        self._wrap_emit(
             processed,
+            style,
             initial_indent=initial_indent,
             subsequent_indent=subsequent_indent,
-            style=style,
             hyphenate=self.hyphenate,
         )
-        self._emit_block(wrapped, stylable=False)
 
-    def _render_horizontal_rule(self, style: BlockStyle) -> None:
+    def _render_horizontal_rule(self, _payload: object, style: BlockStyle) -> None:
         line = self._render_horizontal_rule_line(style)
         self._emit_block([line], stylable=False)
 
-    def _render_blank_line(self) -> None:
+    def _render_blank_line(self, *_: object) -> None:
         if self.paragraph_spacing == 0:
             self.output.append("")
 
     def _render_custom_block(self, payload: AsciiArtPayload, style: BlockStyle) -> None:
 
-        def render(target_style: BlockStyle) -> List[str]:
-            return self._layout_ascii_pieces(payload.pieces, target_style)
-
-        lines = render(style)
-        self._emit_block(lines, stylable=True, render_fn=render, style=style)
+        self._emit_render(partial(self._layout_ascii_pieces, payload.pieces), style, stylable=True)
 
     def _layout_ascii_pieces(self, pieces: List[AsciiArtPiece], style: BlockStyle) -> List[str]:
         if not pieces:
@@ -220,9 +212,7 @@ class TextRenderer:
             piece = pieces[0]
             return self._align_preformatted_lines(piece.lines, style, piece.align)
 
-        margin_left = min(max(style.margin_left, 0), self.width - 1)
-        margin_right = max(style.margin_right, 0)
-        available_width = max(1, self.width - margin_left - margin_right)
+        margin_left, _, available_width = self._margins(style)
 
         heights = [len(piece.lines) for piece in pieces]
         max_height = max(heights) if heights else 0
@@ -230,11 +220,11 @@ class TextRenderer:
 
         positions = self._compute_ascii_positions(pieces, widths, available_width)
         if positions is None:
-            # fall back to vertical stacking by aligning individually
-            result: List[str] = []
-            for piece in pieces:
-                result.extend(self._align_preformatted_lines(piece.lines, style, piece.align))
-            return result
+            return [
+                aligned_line
+                for piece in pieces
+                for aligned_line in self._align_preformatted_lines(piece.lines, style, piece.align)
+            ]
 
         canvas = [list(" " * available_width) for _ in range(max_height)]
         for piece, pos, width in positions:
@@ -252,11 +242,7 @@ class TextRenderer:
                     canvas[row_index][target_index] = char
 
         prefix = " " * margin_left
-        result_lines: List[str] = []
-        for row in canvas:
-            content = "".join(row).rstrip()
-            result_lines.append(prefix + content)
-        return result_lines
+        return [prefix + "".join(row).rstrip() for row in canvas]
 
     def _compute_ascii_positions(
         self,
@@ -272,34 +258,24 @@ class TextRenderer:
         right_cursor = available_width
         placement_map: Dict[int, Tuple[int, int]] = {}
 
-        # Categorise pieces by alignment preference
-        left_indices: List[int] = []
-        center_indices: List[int] = []
-        right_indices: List[int] = []
-
+        groups: Dict[str, List[int]] = {"left": [], "center": [], "right": []}
         for index, piece in enumerate(pieces):
-            align = (piece.align or "left").lower()
-            if align == "right":
-                right_indices.append(index)
-            elif align == "center":
-                center_indices.append(index)
-            else:
-                left_indices.append(index)
+            groups.get((piece.align or "left").lower(), groups["left"]).append(index)
 
-        for index in left_indices:
+        for index in groups["left"]:
             width = min(widths[index], available_width)
             pos = left_cursor
             left_cursor = min(available_width, pos + width + gap)
             placement_map[index] = (pos, width)
 
-        for index in reversed(right_indices):
+        for index in reversed(groups["right"]):
             width = min(widths[index], available_width)
             pos = max(0, right_cursor - width)
             right_cursor = max(0, pos - gap)
             placement_map[index] = (pos, width)
 
         center_used = False
-        for index in center_indices:
+        for index in groups["center"]:
             width = min(widths[index], available_width)
             pos = max(0, (available_width - width) // 2)
             if center_used:
@@ -342,9 +318,7 @@ class TextRenderer:
     ) -> List[str]:
         if not lines:
             return []
-        margin_left = min(max(style.margin_left, 0), self.width - 1)
-        margin_right = max(style.margin_right, 0)
-        available_width = max(1, self.width - margin_left - margin_right)
+        margin_left, _, available_width = self._margins(style)
         processed = [line.rstrip("\n") for line in lines]
         block_width = max((len(line) for line in processed), default=0)
         extra_space = max(0, available_width - block_width)
@@ -359,6 +333,52 @@ class TextRenderer:
         indent = min(margin_left + align_offset, max_indent)
         indent_str = " " * indent
         return [indent_str + line for line in processed]
+
+    def _margins(self, style: BlockStyle) -> Tuple[int, int, int]:
+        margin_left = max(0, min(style.margin_left, self.width - 1))
+        remaining = self.width - margin_left
+        margin_right = max(0, min(style.margin_right, max(0, remaining - 1)))
+        available = max(1, self.width - margin_left - margin_right)
+        return margin_left, margin_right, available
+
+    def _wrap_emit(
+        self,
+        text: str,
+        style: BlockStyle,
+        *,
+        initial_indent: str = "",
+        subsequent_indent: Optional[str] = None,
+        hyphenate: bool,
+        stylable: bool = False,
+    ) -> None:
+        if not text:
+            return
+
+        self._emit_render(
+            lambda target_style: self._wrap_text(
+                text,
+                initial_indent=initial_indent,
+                subsequent_indent=subsequent_indent if subsequent_indent is not None else initial_indent,
+                style=target_style,
+                hyphenate=hyphenate,
+            ),
+            style,
+            stylable=stylable,
+        )
+
+    def _emit_render(
+        self,
+        render_fn: Callable[[BlockStyle], List[str]],
+        style: BlockStyle,
+        *,
+        stylable: bool = False,
+    ) -> None:
+        self._emit_block(
+            render_fn(style),
+            stylable=stylable,
+            render_fn=render_fn if stylable else None,
+            style=style if stylable else None,
+        )
 
     def _emit_block(
         self,
@@ -449,7 +469,7 @@ class TextRenderer:
         if overflow_detected and self.figlet_fallback:
             return None
 
-        margin_left = min(max(style.margin_left, 0), self.width - 1)
+        margin_left, _, _ = self._margins(style)
         indent_str = " " * margin_left
         return [indent_str + line.rstrip() for line in lines]
 
@@ -486,87 +506,45 @@ class TextRenderer:
 
     def _render_horizontal_rule_line(self, style: BlockStyle) -> str:
 
-        margin_left = min(max(style.margin_left, 0), self.width - 1)
-        available_width = max(1, self._effective_width(style))
+        margin_left, _, available_width = self._margins(style)
         return " " * margin_left + "-" * available_width
 
     def _format_code_block(self, lines: List[str], style: BlockStyle) -> List[str]:
         if not lines:
             return []
-        if self.wrap_code_blocks:
-            if self.code_block_line_numbers:
-                return self._format_wrapped_code_block_numbered(lines, style)
-            return self._format_wrapped_code_block_plain(lines, style)
-        if self.code_block_line_numbers:
-            return self._format_code_block_numbered(lines, style)
-        return self._format_code_block_plain(lines, style)
+        margin_left, _, available = self._margins(style)
+        indent = " " * margin_left
+        numbered = self.code_block_line_numbers
+        wrapped = self.wrap_code_blocks
 
-    def _format_code_block_numbered(self, lines: List[str], style: BlockStyle) -> List[str]:
-        margin_indent = " " * max(0, style.margin_left)
-        width = max(2, len(str(len(lines))))
+        if numbered:
+            width = max(2, len(str(len(lines))))
+            lead_fmt = f"{indent}{{:0{width}d}} | "
+            cont_prefix = f"{indent}{' ' * width} | "
+            content_width = max(1, available - (len(lead_fmt.format(0)) - len(indent)))
+        else:
+            base = indent + "   "
+            lead_fmt = None
+            cont_prefix = base
+            content_width = max(1, available - 3)
+
+        def lead(idx: int) -> str:
+            return lead_fmt.format(idx) if numbered else cont_prefix
+
         formatted: List[str] = []
         for idx, line in enumerate(lines, start=1):
-            formatted.append(f"{margin_indent}{idx:0{width}d} | {line}")
-        formatted.append(margin_indent if margin_indent else "")
-        return formatted
-
-    def _format_code_block_plain(self, lines: List[str], style: BlockStyle) -> List[str]:
-        margin_indent = " " * max(0, style.margin_left)
-        base_prefix = margin_indent + "   "
-        formatted: List[str] = []
-        for line in lines:
-            if line:
-                formatted.append(base_prefix + line)
-            else:
-                formatted.append(base_prefix)
-        formatted.append(margin_indent if margin_indent else "")
-        return formatted
-
-    def _format_wrapped_code_block_numbered(self, lines: List[str], style: BlockStyle) -> List[str]:
-        margin_left = min(max(style.margin_left, 0), self.width - 1)
-        margin_indent = " " * margin_left
-        effective_width = self._effective_width(style)
-        number_width = max(2, len(str(len(lines))))
-        prefix_template = f"{margin_indent}{{num:0{number_width}d}} | "
-        continuation_prefix = f"{margin_indent}{' ' * number_width} | "
-        prefix_len_without_margin = len(prefix_template.format(num=0)) - len(margin_indent)
-        content_width = max(1, effective_width - prefix_len_without_margin)
-        formatted: List[str] = []
-        for idx, line in enumerate(lines, start=1):
-            if not line:
-                formatted.append(prefix_template.format(num=idx))
+            prefix = lead(idx)
+            segments = (
+                self._wrap_code_line_segments(line, content_width)
+                if wrapped and line
+                else ([line] if line else [])
+            )
+            if not segments:
+                formatted.append(prefix)
                 continue
-            wrapped_segments = self._wrap_code_line_segments(line, content_width)
-            if not wrapped_segments:
-                formatted.append(prefix_template.format(num=idx))
-                continue
-            first_segment, *rest_segments = wrapped_segments
-            formatted.append(prefix_template.format(num=idx) + first_segment)
-            for segment in rest_segments:
-                formatted.append(continuation_prefix + segment)
-        formatted.append(margin_indent if margin_indent else "")
-        return formatted
-
-    def _format_wrapped_code_block_plain(self, lines: List[str], style: BlockStyle) -> List[str]:
-        margin_left = min(max(style.margin_left, 0), self.width - 1)
-        margin_indent = " " * margin_left
-        effective_width = self._effective_width(style)
-        content_prefix = margin_indent + "   "
-        content_width = max(1, effective_width - 3)
-        formatted: List[str] = []
-        for line in lines:
-            if not line:
-                formatted.append(content_prefix)
-                continue
-            wrapped_segments = self._wrap_code_line_segments(line, content_width)
-            if not wrapped_segments:
-                formatted.append(content_prefix)
-                continue
-            first_segment, *rest_segments = wrapped_segments
-            formatted.append(content_prefix + first_segment)
-            for segment in rest_segments:
-                formatted.append(content_prefix + segment)
-        formatted.append(margin_indent if margin_indent else "")
+            formatted.append(prefix + segments[0])
+            formatted.extend(cont_prefix + segment for segment in segments[1:])
+        formatted.append(indent if indent else "")
         return formatted
 
     def _wrap_code_line_segments(self, line: str, content_width: int) -> List[str]:
@@ -625,23 +603,11 @@ class TextRenderer:
             code_segments.append(match.group(0))
             return f"\u0000CODE{len(code_segments) - 1}\u0000"
 
-        text = re.sub(r"`[^`]*`", stash_code, text)
+        text = CODE_STASH_RE.sub(stash_code, text)
 
-        text = self._apply_pattern(
-            text,
-            re.compile(r"~~(.*?)~~"),
-            lambda m, src: self._stylize_delimited(m.group(1), "-", transform="preserve"),
-        )
-        text = self._apply_pattern(
-            text,
-            re.compile(r"\*\*(.*?)\*\*"),
-            lambda m, src: self._replace_spaced_emphasis(src, m, transform="upper"),
-        )
-        text = self._apply_pattern(
-            text,
-            re.compile(r"(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)"),
-            lambda m, src: self._replace_spaced_emphasis(src, m, transform="preserve"),
-        )
+        text = self._apply_pattern(text, STRIKETHROUGH_RE, lambda m, src: self._stylize_delimited(m.group(1), "-", transform="preserve"))
+        text = self._apply_pattern(text, BOLD_RE, lambda m, src: self._replace_spaced_emphasis(src, m, transform="upper"))
+        text = self._apply_pattern(text, ITALIC_RE, lambda m, src: self._replace_spaced_emphasis(src, m, transform="preserve"))
 
         emphasis_segments: List[str] = []
 
@@ -660,7 +626,7 @@ class TextRenderer:
 
         text = apply_with_placeholder(
             text,
-            re.compile(r"__(.*?)__"),
+            UNDERLINE_STRONG_RE,
             lambda m: self._apply_emphasis_spacing(
                 m.string,
                 m.start(),
@@ -670,7 +636,7 @@ class TextRenderer:
         )
         text = apply_with_placeholder(
             text,
-            re.compile(r"(?<!_)_(?!_)(.*?)(?<!_)_(?!_)"),
+            UNDERLINE_EM_RE,
             lambda m: self._apply_emphasis_spacing(
                 m.string,
                 m.start(),
@@ -679,8 +645,8 @@ class TextRenderer:
             ),
         )
 
-        text = re.sub(r"(?<!\!)\[([^\]]+)\]\(([^)]+)\)", self._handle_link, text)
-        text = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)", self._handle_image, text)
+        text = LINK_RE.sub(self._handle_link, text)
+        text = IMAGE_RE.sub(self._handle_image, text)
 
         for index, replacement in enumerate(emphasis_segments):
             placeholder = f"\u0000EMP{index}\u0000"
@@ -859,8 +825,7 @@ class TextRenderer:
         hyphenate: bool = False,
     ) -> List[str]:
         style = style or BlockStyle()
-        margin_left = min(max(style.margin_left, 0), self.width - 1)
-        available_width = max(1, self._effective_width(style))
+        margin_left, _, available_width = self._margins(style)
 
         subsequent = initial_indent if subsequent_indent is None else subsequent_indent
 
@@ -991,8 +956,7 @@ class TextRenderer:
             lines.append(initial_indent.rstrip())
 
         result: List[str] = []
-        margin_left = min(max(style.margin_left, 0), self.width - 1)
-        width = available_width
+        margin_left, _, width = self._margins(style)
         for line in lines:
             stripped = line.rstrip()
             line_len = len(stripped)
@@ -1031,10 +995,7 @@ class TextRenderer:
         return segments
 
     def _effective_width(self, style: BlockStyle) -> int:
-        margin_left = min(max(style.margin_left, 0), self.width - 1)
-        remaining = self.width - margin_left
-        margin_right = min(max(style.margin_right, 0), max(0, remaining - 1))
-        return max(1, self.width - margin_left - margin_right)
+        return self._margins(style)[2]
 
     def _ensure_header_spacing(self) -> None:
         if self.header_spacing <= 0:
