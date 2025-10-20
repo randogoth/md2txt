@@ -9,7 +9,7 @@ $$ | $$ | $$ |\$$$$$$$ |$$$$$$$$\   \$$$$  |$$  /\$$\   \$$$$ �
 \__| \__| \__| \_______|\________|   \____/ \__/  \__|   \____/ 
 ```
 
-This repository contains the `md2txt` command line tool and supporting libraries for transforming Markdown into formats that work well on retro hardware or constrained text viewers. A small plugin API lets you mix-and-match parsers and renderers so additional formats can plug into the same preprocessing pipeline.
+This repository contains the `md2txt` command line tool and supporting libraries for transforming Markdown into arcane formats that work well on retro hardware or constrained text viewers. A small plugin API lets you mix-and-match parsers and renderers so additional formats can plug into the same preprocessing pipeline.
 
 ## CLI
 
