@@ -5,7 +5,7 @@ This repository contains command line helpers for transforming Markdown into for
 ## Tools
 
 - `md2amb.py` – converts Markdown into Amber-screen formatted text (see script for details).
-- `md2txt.py` – converts Markdown into 80-column, DOS-compatible plain text with extensive formatting support. It ships with the default `markdown` parser and `text` renderer plugins, registers an optional `micron` renderer for Micron-formatted output, and exposes the core pipeline so you can add your own parser or renderer modules:
+- `md2txt.py` – converts Markdown into 80-column, DOS-compatible plain text with extensive formatting support. It ships with the default `markdown` parser and `text` renderer plugins, registers optional `micron` and `amb` renderers for Micron/Ancient Machine Book output, and exposes the core pipeline so you can add your own parser or renderer modules:
   - FIGlet-rendered headings (H1–H3) driven by optional YAML frontmatter (`h1_font`, `h2_font`, `h3_font`).
   - H4+ headings rendered in uppercase with dashed underlines.
   - Emphasis styles converted to spaced or delimited characters, e.g. `**bold**` → `B O L D`, `__strong__` → `_s_t_r_o_n_g_`, `~~strike~~` → `~s~t~r~i~k~e~`.
@@ -30,6 +30,7 @@ python md2txt.py input.md -o output.txt                         # convert to DOS
 python md2txt.py input.md                                      # write result to stdout
 python md2txt.py input.md --width 72                           # override column width
 python md2txt.py input.md --parser markdown --renderer micron  # emit Micron-formatted output
+python md2txt.py input.md --renderer amb                       # emit AMB/AMA markup
 python md2txt.py input.md --renderer-option width=68           # pass KEY=VALUE to a renderer
 ```
 

@@ -23,6 +23,7 @@ from plugins import (
 from text_renderer import TextRenderer
 
 import micron_renderer  # noqa: F401  # register micron renderer plugin
+import ama_renderer  # noqa: F401  # register AMA renderer plugin
 
 
 def _split_option(token: str) -> Tuple[str, str]:
