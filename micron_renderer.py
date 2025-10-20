@@ -33,6 +33,10 @@ class MicronRenderer(TextRenderer):
 
     def _render_heading(self, payload: HeadingPayload, style: BlockStyle) -> None:
         self._ensure_header_spacing()
+        figlet = self._render_figlet_heading(payload.level, payload.text, style)
+        if figlet and all(len(line.rstrip()) <= self.width for line in figlet):
+            self._emit_block(figlet, stylable=False)
+            return
         level = max(1, min(3, payload.level))
         marker = ">" * level
         line = f"{marker} {self._process_inline(payload.text)}".rstrip()
