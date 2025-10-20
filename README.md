@@ -13,12 +13,13 @@ This repository contains the `md2txt` command line tool and supporting libraries
 
 ## CLI
 
-- `md2txt` – converts Markdown into plain text with extensive formatting support. It ships with the default `markdown` parser and `text` renderer plugins, registers optional `micron` and `ama` renderers for Micron/Ancient Machine Book output, and exposes the core pipeline so you can add your own parser or renderer modules:
+- `md2txt` – converts Markdown into plain text with extensive formatting support. It ships with the default `markdown` parser and `text` renderer plugins, registers optional `micron`, `ama`, and `gemini` renderers for Micron/Ancient Machine Book or Gemtext output, and exposes the core pipeline so you can add your own parser or renderer modules:
   - FIGlet-rendered headings.
   - Emphasis styles converted to spaced or delimited characters.
   - Optional alignment and margin controls via HTML `<p>` attributes or MultiMarkdown attribute blocks (e.g. `{:.center margin=20px}`) applied as leading spaces.
   - ASCII art injection with `#[label :align](art.txt)` syntax, supporting multiple art pieces per line and optional `{: .right}` style annotations.
   - Per-document toggles for code block wrapping, numbering, blockquote decoration, and list indentation spacing.
+  - Link references can be emitted per block by setting `links_per_block: true` in frontmatter; otherwise they collect at the end of the document. Gemini output uses `=>` lines while the text renderer keeps numbered footnotes.
 
 ## Usage
 
@@ -28,6 +29,7 @@ md2txt input.md                            # write result to stdout
 md2txt input.md --width 72                 # override column width
 md2txt input.md --renderer micron          # emit Micron-formatted output
 md2txt input.md --renderer ama             # emit AMB/AMA markup
+md2txt input.md --renderer gemini          # emit Gemtext for Gemini capsules
 md2txt input.md --renderer-option width=68 # pass KEY=VALUE to a renderer
 ```
 
@@ -60,6 +62,7 @@ hyphen_lang: en_US
 | `h#_font: <font>` | Accepts any known figlet font name or one of the keywords `caps` (force uppercase) and `title` (title case) to define headings.
 | `hyphenate: true` | activates PyHyphen-based wrapping (optional `hyphen_lang` defaults to `en_US`) |
 | `header_spacing` | controls how many blank lines precede headings (default `2`). |
+| `links_per_block: true` | Emit link references directly below each block instead of collecting them at the end (supported by the text and Gemini renderers). |
 | `list_marker_indent: <int>` | Extra spaces inserted before list markers. |
 | `list_text_spacing: <int>` | Spaces between the marker and the wrapped list text. |
 | `margin_left`/`margin_right` | add leading/trailing spaces to body text |

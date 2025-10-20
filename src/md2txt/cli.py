@@ -22,8 +22,9 @@ from .plugins import (
 )
 from .renderers.text import TextRenderer
 
-from .renderers import micron  # noqa: F401  # register micron renderer plugin
 from .renderers import ama  # noqa: F401  # register AMA renderer plugin
+from .renderers import gemini  # noqa: F401  # register Gemini renderer plugin
+from .renderers import micron  # noqa: F401  # register Micron renderer plugin
 
 
 def _split_option(token: str) -> Tuple[str, str]:

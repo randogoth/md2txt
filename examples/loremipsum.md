@@ -6,6 +6,7 @@ margin_left: 4
 margin_right: 4
 paragraph_spacing: 2
 code_block_wrap: 4
+links_per_block: true
 list_marker_indent: 2
 list_text_spacing: 1
 hyphenate: true

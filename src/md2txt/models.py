@@ -48,6 +48,7 @@ class FrontMatter:
     blockquote_bars: bool = True
     list_marker_indent: int = 0
     list_text_spacing: int = 1
+    links_per_block: bool = False
 
 
 @dataclass

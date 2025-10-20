@@ -94,6 +94,7 @@ class TextRenderer:
         )
         self.list_marker_indent = max(0, frontmatter.list_marker_indent)
         self.list_text_spacing = max(0, frontmatter.list_text_spacing)
+        self.links_per_block = frontmatter.links_per_block
         self._base_style = BlockStyle(
             align="left",
             margin_left=max(0, frontmatter.margin_left),
@@ -128,28 +129,55 @@ class TextRenderer:
             self._apply_style_to_last_block(event.spec)
 
     def finalize(self) -> List[str]:
-        if self.links:
-            if self.output and self.output[-1] != "":
-                self.output.append("")
-            for index, url in self.links:
-                entry = f"[{index}] {url}"
-                self.output.extend(
-                    self._wrap_text(
-                        entry,
-                        initial_indent="",
-                        subsequent_indent="",
-                        style=self._base_style,
-                    )
-                )
-            self._last_stylable_block = None
+        if self.links_per_block:
+            self._flush_links_after_block(trailing_blank=False)
+        elif self.links:
+            self._emit_link_entries(self.links, trailing_blank=False)
+            self.links.clear()
+            self.link_indices.clear()
+        self._last_stylable_block = None
         return self.output
 
     def _handle_block_event(self, event: BlockEvent) -> None:
         handler = self._handlers.get(event.kind)
         if handler:
             handler(event.payload, event.style)
+            if self.links_per_block:
+                self._flush_links_after_block()
         else:
             self._last_stylable_block = None
+
+    def _emit_link_entries(self, entries: List[tuple[int, str]], *, trailing_blank: bool) -> None:
+        if not entries:
+            return
+        if self.output and self.output[-1] != "":
+            self.output.append("")
+        for index, url in entries:
+            entry = f"[{index}] {url}"
+            self.output.extend(
+                self._wrap_text(
+                    entry,
+                    initial_indent="",
+                    subsequent_indent="",
+                    style=self._base_style,
+                )
+            )
+        if trailing_blank and self.output and self.output[-1] != "":
+            self.output.append("")
+
+    def _flush_links_after_block(self, *, trailing_blank: bool = True) -> None:
+        if not self.links:
+            return
+        trailing_blanks: List[str] = []
+        while self.output and self.output[-1] == "":
+            trailing_blanks.append(self.output.pop())
+        trailing_blanks.reverse()
+        add_trailing_blank = trailing_blank and not trailing_blanks
+        self._emit_link_entries(self.links, trailing_blank=add_trailing_blank)
+        self.links.clear()
+        self.link_indices.clear()
+        if trailing_blanks:
+            self.output.extend(trailing_blanks)
 
     def _render_paragraph(self, payload: ParagraphPayload, style: BlockStyle) -> None:
         processed = self._process_inline(payload.text)
