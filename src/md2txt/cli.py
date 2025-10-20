@@ -9,10 +9,10 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from conversion_core import parse_frontmatter, read_lines, run_conversion
-from md_types import BlockStyle, FrontMatter
-from markdown_parser import MarkdownParser
-from plugins import (
+from .conversion.core import parse_frontmatter, read_lines, run_conversion
+from .models import BlockStyle, FrontMatter
+from .parsers.markdown import MarkdownParser
+from .plugins import (
     available_parsers,
     available_renderers,
     get_parser_factory,
@@ -20,10 +20,10 @@ from plugins import (
     register_parser,
     register_renderer,
 )
-from text_renderer import TextRenderer
+from .renderers.text import TextRenderer
 
-import micron_renderer  # noqa: F401  # register micron renderer plugin
-import ama_renderer  # noqa: F401  # register AMA renderer plugin
+from .renderers import micron  # noqa: F401  # register micron renderer plugin
+from .renderers import ama  # noqa: F401  # register AMA renderer plugin
 
 
 def _split_option(token: str) -> Tuple[str, str]:

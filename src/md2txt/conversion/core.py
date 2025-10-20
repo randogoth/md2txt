@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Protocol, Set, Tuple, TypeVar
 
-from md_types import BlockEvent, BlockStyle, FrontMatter, StyleUpdateEvent
+from ..models import BlockEvent, BlockStyle, FrontMatter, StyleUpdateEvent
 
 
 FRONTMATTER_PATTERN = re.compile(r"^---\s*$")

@@ -5,7 +5,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Callable, List
 
-from md_types import (
+from ..models import (
     AsciiArtPayload,
     BlockQuotePayload,
     BlockStyle,
@@ -16,8 +16,8 @@ from md_types import (
     ParagraphPayload,
     StyleSpec,
 )
-from plugins import register_renderer
-from text_renderer import (
+from ..plugins import register_renderer
+from .text import (
     BOLD_RE,
     CODE_STASH_RE,
     IMAGE_RE,

@@ -1,10 +1,20 @@
 [project]
-name = "md2amb"
+name = "md2txt"
 version = "0.1.0"
-description = "Add your description here"
+description = "Markdown to plain-text conversion toolkit"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "pyfiglet>=0.8.0",
     "pyphen>=0.17.2",
 ]
+
+[project.scripts]
+md2txt = "md2txt.cli:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

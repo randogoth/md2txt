@@ -5,8 +5,8 @@ import re
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Optional, Union
 
-from conversion_core import ASCII_SENTINEL_PREFIX
-from md_types import (
+from ..conversion.core import ASCII_SENTINEL_PREFIX
+from ..models import (
     AsciiArtPayload,
     AsciiArtPiece,
     BlockEvent,

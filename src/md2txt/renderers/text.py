@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from functools import partial
 from typing import Callable, Dict, List, Optional, Tuple
 
-from md_types import (
+from ..models import (
     AsciiArtPayload,
     AsciiArtPiece,
     BlockEvent,

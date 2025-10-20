@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from conversion_core import ParserFactory, RendererFactory
-from plugin_registry import PluginRegistry
+from ..conversion.core import ParserFactory, RendererFactory
+from .registry import PluginRegistry
 
 
 parser_plugins = PluginRegistry[ParserFactory]()
@@ -32,3 +32,13 @@ def available_parsers() -> list[str]:
 
 def available_renderers() -> list[str]:
     return renderer_plugins.names()
+
+
+__all__ = [
+    "available_parsers",
+    "available_renderers",
+    "get_parser_factory",
+    "get_renderer_factory",
+    "register_parser",
+    "register_renderer",
+]
