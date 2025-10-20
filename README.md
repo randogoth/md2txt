@@ -10,9 +10,12 @@ This repository contains command line helpers for transforming Markdown into for
   - H4+ headings rendered in uppercase with dashed underlines.
   - Emphasis styles converted to spaced or delimited characters, e.g. `**bold**` → `B O L D`, `__strong__` → `_s_t_r_o_n_g_`, `~~strike~~` → `~s~t~r~i~k~e~`.
   - Blockquotes prefixed by `|    `, lists preserved, inline code untouched.
-  - Code blocks numbered (`01 | line`), with both fenced and indented fences supported.
+  - Code blocks numbered (`01 | line`), with both fenced and indented fences supported (see “Rendering Controls” for customisation).
   - Links transformed into `[label](n)` references, with footnote-style URL list at the end.
   - Optional alignment and margin controls via HTML `<p>` attributes or MultiMarkdown attribute blocks (e.g. `{:.center margin=20px}`) applied as leading spaces.
+  - Recursive file includes using `![[file.md]]` or `{.include file.md}` (frontmatter inside the included file is ignored).
+  - ASCII art injection with `#[label :align](art.txt)` syntax, supporting multiple art pieces per line and optional `{: .right}` style annotations.
+  - Per-document toggles for code block wrapping, numbering, blockquote decoration, and list indentation spacing.
 
 ## Requirements
 
@@ -68,6 +71,45 @@ Paragraph styled via MMD attributes.
 ```
 
 Margins are interpreted as spaces; values using `px` are rounded to the nearest integer, and `margin: 0 auto;` centers content.
+
+## File Includes
+
+Two lightweight include syntaxes are recognised during preprocessing:
+
+- `![[relative/path.md]]`
+- `{.include relative/path.md}`
+
+The paths are resolved relative to the file that contains the directive. Any YAML frontmatter in the included file is stripped before inlining, and include cycles are detected and rejected.
+
+## ASCII Art Blocks
+
+Inline or block-level ASCII art can be embedded directly in Markdown:
+
+```markdown
+#[dragon :left](examples/dragon.txt)
+#[dragon :right](examples/dragon.txt){:.center}
+#[dragon_a :left](a.txt) #[dragon_b :center](b.txt) #[dragon_c :right](c.txt)
+```
+
+- `#[label](file)` loads the contents of the text file and inserts it as a preformatted block.
+- Colon tags inside the label (`:left`, `:center`, `:right`) steer the alignment of each art piece. Additional colon tags are ignored.
+- When multiple directives appear on the same line, the pieces are laid out side-by-side when space permits, otherwise they fall back to stacked blocks.
+- A trailing MultiMarkdown attribute block (e.g. `{:.center}`) is applied to the combined block after the art has been injected.
+
+## Rendering Controls via Frontmatter
+
+Fine-tune formatting by adding keys to frontmatter:
+
+| Key | Description |
+| --- | --- |
+| `wrap_code_blocks: true` | Wrap fenced/indented code blocks to fit the page width instead of using a gutter. |
+| `code_block_wrap: <bool or int>` | Enables wrapping; when set to an integer it also controls the extra indentation applied to wrapped continuation lines. |
+| `code_block_line_numbers: false` | Disable the `01 |` gutter in wrapped or unwrapped code blocks. |
+| `blockquote_bars: false` | Replace the default `|` prefix with three spaces. |
+| `list_marker_indent: <int>` | Extra spaces inserted before list markers. |
+| `list_text_spacing: <int>` | Spaces between the marker and the wrapped list text. |
+
+All values are optional—defaults maintain the legacy behaviour.
 
 ## Output Line Endings
 
