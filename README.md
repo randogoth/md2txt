@@ -33,10 +33,10 @@ uv tool install --from github:randogoth/md2txt md2txt
 md2txt input.md -o output.txt              # convert to DOS-friendly text
 md2txt input.md                            # write result to stdout
 md2txt input.md --width 72                 # override column width
-md2txt input.md --renderer micron          # emit Micron-formatted output
-md2txt input.md --renderer ama             # emit AMB/AMA markup
+md2txt input.md --renderer micron          # emit Micron-formatted output for NomadNet
+md2txt input.md --renderer ama             # emit AMA markup for Ancient Machine Book
 md2txt input.md --renderer gemini          # emit Gemtext for Gemini capsules
-md2txt input.md --renderer-option width=68 # pass KEY=VALUE to a renderer
+md2txt input.md --renderer-option width=68 # pass column width to a renderer
 ```
 
  - `--parser` and `--renderer` select a plugin by name (defaults are `markdown` and `text`).
