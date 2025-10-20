@@ -4,9 +4,11 @@ import re
 import string
 import textwrap
 from dataclasses import dataclass
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 from md_types import (
+    AsciiArtPayload,
+    AsciiArtPiece,
     BlockEvent,
     BlockKind,
     BlockQuotePayload,
@@ -136,6 +138,8 @@ class TextRenderer:
             self._render_horizontal_rule(event.style)
         elif event.kind is BlockKind.BLANK_LINE:
             self._render_blank_line()
+        elif event.kind is BlockKind.CUSTOM_BLOCK:
+            self._render_custom_block(event.payload, event.style)
         else:  # pragma: no cover - defensive default
             self._last_stylable_block = None
 
@@ -200,6 +204,161 @@ class TextRenderer:
     def _render_blank_line(self) -> None:
         if self.paragraph_spacing == 0:
             self.output.append("")
+
+    def _render_custom_block(self, payload: AsciiArtPayload, style: BlockStyle) -> None:
+
+        def render(target_style: BlockStyle) -> List[str]:
+            return self._layout_ascii_pieces(payload.pieces, target_style)
+
+        lines = render(style)
+        self._emit_block(lines, stylable=True, render_fn=render, style=style)
+
+    def _layout_ascii_pieces(self, pieces: List[AsciiArtPiece], style: BlockStyle) -> List[str]:
+        if not pieces:
+            return []
+        if len(pieces) == 1:
+            piece = pieces[0]
+            return self._align_preformatted_lines(piece.lines, style, piece.align)
+
+        margin_left = min(max(style.margin_left, 0), self.width - 1)
+        margin_right = max(style.margin_right, 0)
+        available_width = max(1, self.width - margin_left - margin_right)
+
+        heights = [len(piece.lines) for piece in pieces]
+        max_height = max(heights) if heights else 0
+        widths = [self._ascii_piece_width(piece.lines) for piece in pieces]
+
+        positions = self._compute_ascii_positions(pieces, widths, available_width)
+        if positions is None:
+            # fall back to vertical stacking by aligning individually
+            result: List[str] = []
+            for piece in pieces:
+                result.extend(self._align_preformatted_lines(piece.lines, style, piece.align))
+            return result
+
+        canvas = [list(" " * available_width) for _ in range(max_height)]
+        for piece, pos, width in positions:
+            lines = piece.lines
+            for row_index in range(max_height):
+                if row_index >= len(lines):
+                    continue
+                line = lines[row_index]
+                for col_index, char in enumerate(line):
+                    target_index = pos + col_index
+                    if target_index >= available_width:
+                        break
+                    if char == " ":
+                        continue
+                    canvas[row_index][target_index] = char
+
+        prefix = " " * margin_left
+        result_lines: List[str] = []
+        for row in canvas:
+            content = "".join(row).rstrip()
+            result_lines.append(prefix + content)
+        return result_lines
+
+    def _compute_ascii_positions(
+        self,
+        pieces: List[AsciiArtPiece],
+        widths: List[int],
+        available_width: int,
+    ) -> Optional[List[Tuple[AsciiArtPiece, int, int]]]:
+        if available_width <= 0:
+            return None
+
+        gap = 4
+        left_cursor = 0
+        right_cursor = available_width
+        placement_map: Dict[int, Tuple[int, int]] = {}
+
+        # Categorise pieces by alignment preference
+        left_indices: List[int] = []
+        center_indices: List[int] = []
+        right_indices: List[int] = []
+
+        for index, piece in enumerate(pieces):
+            align = (piece.align or "left").lower()
+            if align == "right":
+                right_indices.append(index)
+            elif align == "center":
+                center_indices.append(index)
+            else:
+                left_indices.append(index)
+
+        for index in left_indices:
+            width = min(widths[index], available_width)
+            pos = left_cursor
+            left_cursor = min(available_width, pos + width + gap)
+            placement_map[index] = (pos, width)
+
+        for index in reversed(right_indices):
+            width = min(widths[index], available_width)
+            pos = max(0, right_cursor - width)
+            right_cursor = max(0, pos - gap)
+            placement_map[index] = (pos, width)
+
+        center_used = False
+        for index in center_indices:
+            width = min(widths[index], available_width)
+            pos = max(0, (available_width - width) // 2)
+            if center_used:
+                # shift to current left cursor if already used center
+                pos = left_cursor
+                left_cursor = min(available_width, pos + width + gap)
+            else:
+                center_used = True
+            placement_map[index] = (pos, width)
+
+        # Detect overlap; if found, abort to fallback
+        for i in range(len(pieces)):
+            if i not in placement_map:
+                continue
+            pos_i, width_i = placement_map[i]
+            end_i = pos_i + width_i
+            for j in range(i + 1, len(pieces)):
+                if j not in placement_map:
+                    continue
+                pos_j, width_j = placement_map[j]
+                if pos_i <= pos_j < end_i or pos_j <= pos_i < pos_j + width_j:
+                    return None
+
+        ordered_positions: List[Tuple[AsciiArtPiece, int, int]] = []
+        for index, piece in enumerate(pieces):
+            if index not in placement_map:
+                continue
+            pos, width = placement_map[index]
+            ordered_positions.append((piece, pos, width))
+        return ordered_positions
+
+    def _ascii_piece_width(self, lines: List[str]) -> int:
+        return max((len(line.rstrip("\n")) for line in lines), default=0)
+
+    def _align_preformatted_lines(
+        self,
+        lines: List[str],
+        style: BlockStyle,
+        explicit_align: Optional[str] = None,
+    ) -> List[str]:
+        if not lines:
+            return []
+        margin_left = min(max(style.margin_left, 0), self.width - 1)
+        margin_right = max(style.margin_right, 0)
+        available_width = max(1, self.width - margin_left - margin_right)
+        processed = [line.rstrip("\n") for line in lines]
+        block_width = max((len(line) for line in processed), default=0)
+        extra_space = max(0, available_width - block_width)
+        align = (explicit_align or style.align or "left").lower()
+        if align == "center" or align == "centre":
+            align_offset = extra_space // 2
+        elif align == "right":
+            align_offset = extra_space
+        else:
+            align_offset = 0
+        max_indent = max(0, self.width - block_width)
+        indent = min(margin_left + align_offset, max_indent)
+        indent_str = " " * indent
+        return [indent_str + line for line in processed]
 
     def _emit_block(
         self,

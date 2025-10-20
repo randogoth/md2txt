@@ -41,20 +41,11 @@ populifer adeunt quicquam cum **ales** Ixion angulus placet reddere.
 ## Tractaque serpens arva quoque
 {:.center}
 
-### Unordered
+# Include
 
-+ Create a list by starting a line with `+`, `-`, or `*`
-- Marker character change forces new list start:
-* Ac tristique libero volutpat at jesrh hjsrh sejr hhsjehv sjtrhg jrdth
-+ Facilisis in pretium nisl aliquet
-- Nulla volutpat aliquam velit
-+ Very easy
+#[d1 :left](dragon.txt) #[d1 :center :mirror](dragon.txt) #[d1 :right](dragon.txt)
 
-### Ordered
-
-1. Lorem ipsum dolor sit amet
-2. Consectetur adipiscing elit
-3. Integer molestie lorem at massa
+![[markdown.md]]
 
 Inprudens dum memor alma, casses dedi Sinuessa iam quid adicit
 `gate_truncate_wave`. [Geratur de](#salientia-iungit-contra-et), insolida

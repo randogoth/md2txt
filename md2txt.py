@@ -5,10 +5,11 @@ Convert Markdown into 80-column DOS-compatible plain text.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, List, Optional, Set, Tuple
 
 from md_types import BlockStyle, FrontMatter
 from markdown_parser import MarkdownParser
@@ -16,6 +17,14 @@ from text_renderer import TextRenderer
 
 
 FRONTMATTER_PATTERN = re.compile(r"^---\s*$")
+INCLUDE_WIKILINK_PATTERN = re.compile(r"^\s*!\[\[(.+?)\]\]\s*$")
+INCLUDE_DIRECTIVE_PATTERN = re.compile(r"^\s*\{\s*\.include\s+(.+?)\s*\}\s*$")
+ASCII_BLOCK_PATTERN = re.compile(
+    r"^\s*#\[(?P<label>[^\]]+)\]\((?P<target>[^)]+)\)\s*(?P<attr>\{\s*:[^}]+\s*\})?\s*$"
+)
+ASCII_INLINE_PATTERN = re.compile(r"#\[(?P<label>[^\]]+)\]\((?P<target>[^)]+)\)")
+MMD_ATTR_TAIL_RE = re.compile(r"(.*?)\s*\{\s*:(.+?)\}\s*$")
+ASCII_SENTINEL_PREFIX = "\u0000ASCII:"
 
 
 def _parse_int(value: Optional[str], default: int = 0) -> int:
@@ -46,7 +55,10 @@ def convert_markdown(
     *,
     width: int,
     frontmatter: FrontMatter,
+    base_path: Optional[Path] = None,
 ) -> List[str]:
+    base_dir = (base_path or Path.cwd()).resolve()
+    expanded_lines = _expand_includes(list(lines), base_dir, set())
     base_style = BlockStyle(
         align="left",
         margin_left=max(0, frontmatter.margin_left),
@@ -54,9 +66,141 @@ def convert_markdown(
     )
     parser = MarkdownParser(base_style)
     renderer = TextRenderer(width=width, frontmatter=frontmatter)
-    for event in parser.parse(lines):
+    for event in parser.parse(expanded_lines):
         renderer.handle_event(event)
     return renderer.finalize()
+
+
+def _expand_includes(lines: List[str], base_dir: Path, include_stack: Set[Path]) -> List[str]:
+    expanded: List[str] = []
+    for line in lines:
+        ascii_segments = _extract_ascii_segments(line, base_dir)
+        if ascii_segments is not None:
+            for sentinel_line, attr_line in ascii_segments:
+                expanded.append(sentinel_line)
+                if attr_line is not None:
+                    expanded.append(attr_line)
+            continue
+        target = _extract_include_target(line)
+        if target is None:
+            expanded.append(line)
+            continue
+        target_path = (base_dir / target).resolve()
+        if target_path in include_stack:
+            raise RuntimeError(f"Circular include detected for '{target_path}'.")
+        if not target_path.exists():
+            raise FileNotFoundError(f"Included file '{target_path}' was not found.")
+        include_stack.add(target_path)
+        included_lines = read_lines(target_path)
+        _, include_body = parse_frontmatter(included_lines)
+        included_content = _expand_includes(include_body, target_path.parent, include_stack)
+        expanded.extend(included_content)
+        include_stack.remove(target_path)
+    return expanded
+
+
+def _extract_include_target(line: str) -> Optional[str]:
+    stripped = line.rstrip("\n")
+    match = INCLUDE_WIKILINK_PATTERN.match(stripped)
+    if match:
+        return _normalize_include_target(match.group(1))
+    match = INCLUDE_DIRECTIVE_PATTERN.match(stripped)
+    if match:
+        return _normalize_include_target(match.group(1))
+    return None
+
+
+def _normalize_include_target(value: str) -> str:
+    trimmed = value.strip()
+    if len(trimmed) >= 2 and ((trimmed[0] == trimmed[-1]) and trimmed[0] in {"'", '"'}):
+        trimmed = trimmed[1:-1].strip()
+    return trimmed
+
+
+def _extract_ascii_segments(line: str, base_dir: Path) -> Optional[List[Tuple[str, Optional[str]]]]:
+    stripped_line = line.rstrip("\n")
+    block_match = ASCII_BLOCK_PATTERN.match(stripped_line)
+    if block_match:
+        label = block_match.group("label")
+        target = block_match.group("target")
+        attr_text = block_match.group("attr")
+        sentinel = _make_ascii_sentinel(label, target, base_dir)
+        attr_line = f"{attr_text}\n" if attr_text else None
+        return [(sentinel, attr_line)]
+
+    matches = list(ASCII_INLINE_PATTERN.finditer(stripped_line))
+    if not matches:
+        return None
+
+    pieces: List[dict] = []
+    last_end = 0
+    for match in matches:
+        prefix = stripped_line[last_end : match.start()]
+        if prefix.strip():
+            return None
+        label = match.group("label")
+        target = match.group("target")
+        block_type, block_name, align = _parse_ascii_label(label)
+        normalized_target = _normalize_include_target(target)
+        target_path = (base_dir / normalized_target).resolve()
+        if not target_path.exists():
+            raise FileNotFoundError(f"ASCII art file '{target_path}' was not found.")
+        pieces.append(
+            {
+                "type": block_type,
+                "name": block_name,
+                "path": str(target_path),
+                "align": align,
+            }
+        )
+        last_end = match.end()
+
+    suffix = stripped_line[last_end:]
+    if suffix.strip():
+        return None
+
+    if not pieces:
+        return None
+
+    sentinel = f"{ASCII_SENTINEL_PREFIX}{json.dumps({'pieces': pieces})}\n"
+    return [(sentinel, None)]
+
+
+def _make_ascii_sentinel(label: str, target: str, base_dir: Path) -> str:
+    block_type, block_name, align = _parse_ascii_label(label)
+    normalized_target = _normalize_include_target(target)
+    target_path = (base_dir / normalized_target).resolve()
+    if not target_path.exists():
+        raise FileNotFoundError(f"ASCII art file '{target_path}' was not found.")
+    payload = {
+        "pieces": [
+            {
+                "type": block_type,
+                "name": block_name,
+                "path": str(target_path),
+                "align": align,
+            }
+        ]
+    }
+    return f"{ASCII_SENTINEL_PREFIX}{json.dumps(payload)}\n"
+
+
+def _parse_ascii_label(label: str) -> Tuple[str, str, Optional[str]]:
+    tokens = label.strip().split()
+    non_colon: List[str] = []
+    align: Optional[str] = None
+    for token in tokens:
+        if token.startswith(":"):
+            tag = token[1:].strip().lower()
+            if tag in {"left", "right", "center", "centre"}:
+                align = "center" if tag in {"center", "centre"} else tag
+            # ignore other colon tags for now
+        else:
+            non_colon.append(token)
+
+    block_type = non_colon[0] if non_colon else "custom"
+    block_name = " ".join(non_colon[1:]) if len(non_colon) > 1 else ""
+    return block_type, block_name, align
 
 
 def parse_frontmatter(lines: List[str]) -> Tuple[FrontMatter, List[str]]:
@@ -145,7 +289,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
     lines = read_lines(args.input_path)
     frontmatter, content = parse_frontmatter(lines)
-    converted_lines = convert_markdown(content, width=args.width, frontmatter=frontmatter)
+    converted_lines = convert_markdown(
+        content,
+        width=args.width,
+        frontmatter=frontmatter,
+        base_path=args.input_path.parent,
+    )
     write_output(args.output, converted_lines)
     return 0
 

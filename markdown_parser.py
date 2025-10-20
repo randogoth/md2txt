@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import json
 import re
-from typing import Iterable, Iterator, List, Optional, Union
+from pathlib import Path
+from typing import Dict, Iterable, Iterator, List, Optional, Union
 
 from md_types import (
+    AsciiArtPayload,
+    AsciiArtPiece,
     BlockEvent,
     BlockKind,
     BlockQuotePayload,
@@ -27,6 +31,7 @@ PARA_OPEN_RE = re.compile(r"^\s*<p\b([^>]*)>\s*$", re.IGNORECASE)
 PARA_CLOSE_RE = re.compile(r"^\s*</p>\s*$", re.IGNORECASE)
 MMD_ATTR_LINE_RE = re.compile(r"^\{\s*:(.+)\}\s*$")
 MMD_ATTR_TAIL_RE = re.compile(r"(.*?)\s*\{\s*:(.+?)\}\s*$")
+ASCII_SENTINEL_PREFIX = "\u0000ASCII:"
 
 
 class MarkdownParser:
@@ -36,6 +41,7 @@ class MarkdownParser:
         self._paragraph_style_spec: Optional[StyleSpec] = None
         self._pending_block_style_spec: Optional[StyleSpec] = None
         self._last_stylable_block: bool = False
+        self._ascii_cache: Dict[str, List[str]] = {}
 
     def parse(self, lines: Iterable[str]) -> Iterator[Union[BlockEvent, StyleUpdateEvent]]:
         self._reset_state()
@@ -47,6 +53,23 @@ class MarkdownParser:
 
         for raw_line in iterator:
             line = raw_line.rstrip("\n")
+
+            if line.startswith(ASCII_SENTINEL_PREFIX):
+                event = self._flush_paragraph(current_paragraph)
+                if event is not None:
+                    yield event
+                current_paragraph = []
+                payload = self._build_ascii_payload(line)
+                style = self._combine_styles(self._current_style(), self._pending_block_style_spec)
+                self._pending_block_style_spec = None
+                self._last_stylable_block = True
+                yield BlockEvent(
+                    kind=BlockKind.CUSTOM_BLOCK,
+                    payload=payload,
+                    style=style,
+                    stylable=True,
+                )
+                continue
 
             if in_code_block:
                 if line.strip().startswith("```"):
@@ -296,6 +319,69 @@ class MarkdownParser:
             style=self._clone_style(),
             stylable=False,
         )
+
+    def _build_ascii_payload(self, sentinel_line: str) -> AsciiArtPayload:
+        entries = self._decode_ascii_sentinel(sentinel_line)
+        pieces: List[AsciiArtPiece] = []
+        for entry in entries:
+            lines = self._load_ascii_art_lines(entry["path"])
+            pieces.append(
+                AsciiArtPiece(
+                    block_type=entry["type"],
+                    name=entry["name"],
+                    path=entry["path"],
+                    lines=lines,
+                    align=entry["align"],
+                )
+            )
+        return AsciiArtPayload(pieces=pieces)
+
+    def _decode_ascii_sentinel(self, line: str) -> List[Dict[str, str]]:
+        payload = line[len(ASCII_SENTINEL_PREFIX) :]
+        try:
+            data = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid ASCII sentinel payload: {payload}") from exc
+        if "pieces" in data and isinstance(data["pieces"], list):
+            raw_pieces = data["pieces"]
+        else:
+            raw_pieces = [data]
+        pieces: List[Dict[str, str]] = []
+        for entry in raw_pieces:
+            for key in ("type", "name", "path"):
+                if key not in entry:
+                    raise ValueError(f"ASCII sentinel missing '{key}' field: {payload}")
+            align = entry.get("align")
+            align_str = str(align) if align is not None else None
+            if align_str is not None:
+                align_lower = align_str.strip().lower()
+                if align_lower == "centre":
+                    align_lower = "center"
+                if align_lower not in {"left", "center", "right"}:
+                    align_lower = None
+            else:
+                align_lower = None
+            pieces.append(
+                {
+                    "type": str(entry["type"]),
+                    "name": str(entry["name"]),
+                    "path": str(entry["path"]),
+                    "align": align_lower,
+                }
+            )
+        return pieces
+
+    def _load_ascii_art_lines(self, path_str: str) -> List[str]:
+        cached = self._ascii_cache.get(path_str)
+        if cached is not None:
+            return list(cached)
+        path = Path(path_str)
+        if not path.exists():
+            raise FileNotFoundError(f"ASCII art file '{path}' was not found.")
+        text = path.read_text(encoding="utf-8")
+        lines = text.splitlines()
+        self._ascii_cache[path_str] = lines
+        return list(lines)
 
     def _make_base_style(self) -> BlockStyle:
         return BlockStyle(

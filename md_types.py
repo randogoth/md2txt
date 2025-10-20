@@ -13,6 +13,7 @@ class BlockKind(Enum):
     LIST_ITEM = "list_item"
     HORIZONTAL_RULE = "horizontal_rule"
     BLANK_LINE = "blank_line"
+    CUSTOM_BLOCK = "custom_block"
 
 
 @dataclass
@@ -78,6 +79,20 @@ class ListItemPayload:
     spacing: str
     text: str
     ordered: bool
+
+
+@dataclass
+class AsciiArtPiece:
+    block_type: str
+    name: str
+    path: str
+    lines: List[str]
+    align: Optional[str] = None
+
+
+@dataclass
+class AsciiArtPayload:
+    pieces: List[AsciiArtPiece]
 
 
 @dataclass
