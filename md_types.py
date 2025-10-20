@@ -41,6 +41,10 @@ class FrontMatter:
     hyphen_lang: str = "en_US"
     figlet_fallback: bool = False
     header_spacing: int = 2
+    wrap_code_blocks: bool = False
+    code_block_wrap_indent: int = 2
+    code_block_line_numbers: bool = True
+    blockquote_bars: bool = True
 
 
 @dataclass

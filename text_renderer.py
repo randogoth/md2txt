@@ -73,6 +73,12 @@ class TextRenderer:
         self.hyphen_lang = frontmatter.hyphen_lang or "en_US"
         self.figlet_fallback = frontmatter.figlet_fallback
         self.header_spacing = max(0, frontmatter.header_spacing)
+        self.wrap_code_blocks = frontmatter.wrap_code_blocks
+        self.code_block_line_numbers = frontmatter.code_block_line_numbers
+        self.blockquote_bars = frontmatter.blockquote_bars
+        self.wrap_code_blocks_indent = (
+            max(0, frontmatter.code_block_wrap_indent) if self.wrap_code_blocks else 0
+        )
         self._base_style = BlockStyle(
             align="left",
             margin_left=max(0, frontmatter.margin_left),
@@ -157,7 +163,7 @@ class TextRenderer:
 
     def _render_blockquote(self, payload: BlockQuotePayload, style: BlockStyle) -> None:
         processed = self._process_inline(payload.text)
-        indent_unit = " | "
+        indent_unit = " | " if self.blockquote_bars else "   "
         indent = indent_unit * max(1, payload.depth)
         wrapped = self._wrap_text(
             processed,
@@ -321,13 +327,130 @@ class TextRenderer:
     def _format_code_block(self, lines: List[str], style: BlockStyle) -> List[str]:
         if not lines:
             return []
-        width = max(2, len(str(len(lines))))
+        if self.wrap_code_blocks:
+            if self.code_block_line_numbers:
+                return self._format_wrapped_code_block_numbered(lines, style)
+            return self._format_wrapped_code_block_plain(lines, style)
+        if self.code_block_line_numbers:
+            return self._format_code_block_numbered(lines, style)
+        return self._format_code_block_plain(lines, style)
+
+    def _format_code_block_numbered(self, lines: List[str], style: BlockStyle) -> List[str]:
         margin_indent = " " * max(0, style.margin_left)
+        width = max(2, len(str(len(lines))))
         formatted: List[str] = []
         for idx, line in enumerate(lines, start=1):
             formatted.append(f"{margin_indent}{idx:0{width}d} | {line}")
         formatted.append(margin_indent if margin_indent else "")
         return formatted
+
+    def _format_code_block_plain(self, lines: List[str], style: BlockStyle) -> List[str]:
+        margin_indent = " " * max(0, style.margin_left)
+        base_prefix = margin_indent + "   "
+        formatted: List[str] = []
+        for line in lines:
+            if line:
+                formatted.append(base_prefix + line)
+            else:
+                formatted.append(base_prefix)
+        formatted.append(margin_indent if margin_indent else "")
+        return formatted
+
+    def _format_wrapped_code_block_numbered(self, lines: List[str], style: BlockStyle) -> List[str]:
+        margin_left = min(max(style.margin_left, 0), self.width - 1)
+        margin_indent = " " * margin_left
+        effective_width = self._effective_width(style)
+        number_width = max(2, len(str(len(lines))))
+        prefix_template = f"{margin_indent}{{num:0{number_width}d}} | "
+        continuation_prefix = f"{margin_indent}{' ' * number_width} | "
+        prefix_len_without_margin = len(prefix_template.format(num=0)) - len(margin_indent)
+        content_width = max(1, effective_width - prefix_len_without_margin)
+        formatted: List[str] = []
+        for idx, line in enumerate(lines, start=1):
+            if not line:
+                formatted.append(prefix_template.format(num=idx))
+                continue
+            wrapped_segments = self._wrap_code_line_segments(line, content_width)
+            if not wrapped_segments:
+                formatted.append(prefix_template.format(num=idx))
+                continue
+            first_segment, *rest_segments = wrapped_segments
+            formatted.append(prefix_template.format(num=idx) + first_segment)
+            for segment in rest_segments:
+                formatted.append(continuation_prefix + segment)
+        formatted.append(margin_indent if margin_indent else "")
+        return formatted
+
+    def _format_wrapped_code_block_plain(self, lines: List[str], style: BlockStyle) -> List[str]:
+        margin_left = min(max(style.margin_left, 0), self.width - 1)
+        margin_indent = " " * margin_left
+        effective_width = self._effective_width(style)
+        content_prefix = margin_indent + "   "
+        content_width = max(1, effective_width - 3)
+        formatted: List[str] = []
+        for line in lines:
+            if not line:
+                formatted.append(content_prefix)
+                continue
+            wrapped_segments = self._wrap_code_line_segments(line, content_width)
+            if not wrapped_segments:
+                formatted.append(content_prefix)
+                continue
+            first_segment, *rest_segments = wrapped_segments
+            formatted.append(content_prefix + first_segment)
+            for segment in rest_segments:
+                formatted.append(content_prefix + segment)
+        formatted.append(margin_indent if margin_indent else "")
+        return formatted
+
+    def _wrap_code_line_segments(self, line: str, content_width: int) -> List[str]:
+        if not line:
+            return []
+        segments: List[str] = []
+        remaining = line
+        current_indent = 0
+        max_indent_allowed = max(0, content_width - 1)
+        while remaining:
+            available = max(1, content_width - current_indent)
+            segment, remaining = self._split_code_segment(remaining, available)
+            segments.append(" " * current_indent + segment)
+            leading = self._leading_space_count(segment)
+            total_indent = current_indent + leading
+            desired_indent = total_indent + self.wrap_code_blocks_indent
+            current_indent = min(max_indent_allowed, desired_indent)
+        return segments
+
+    def _split_code_segment(self, text: str, max_width: int) -> tuple[str, str]:
+        if max_width <= 0:
+            max_width = 1
+        if len(text) <= max_width:
+            return text, ""
+        slice_text = text[:max_width]
+        break_pos = -1
+        for idx, char in enumerate(slice_text):
+            if char in {" ", "\t"}:
+                break_pos = idx
+        if break_pos <= 0:
+            segment = slice_text
+            remainder = text[len(segment) :]
+        else:
+            segment = text[:break_pos]
+            remainder = text[break_pos:]
+        if not segment:
+            segment = slice_text
+            remainder = text[len(segment) :]
+        return segment, remainder
+
+    def _leading_space_count(self, text: str) -> int:
+        count = 0
+        for char in text:
+            if char == " ":
+                count += 1
+            elif char == "\t":
+                count += 1
+            else:
+                break
+        return count
 
     def _process_inline(self, text: str) -> str:
         code_segments: List[str] = []
@@ -759,4 +882,3 @@ class TextRenderer:
             else:
                 break
         self.output.extend([""] * (self.header_spacing - existing))
-

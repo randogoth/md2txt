@@ -79,6 +79,22 @@ def parse_frontmatter(lines: List[str]) -> Tuple[FrontMatter, List[str]]:
         paragraph_spacing_value = frontmatter.get("lines_between_paragraphs")
     if paragraph_spacing_value is None:
         paragraph_spacing_value = frontmatter.get("paragraph_lines")
+    default_wrap_indent = 2
+    wrap_code_blocks = _parse_bool(frontmatter.get("wrap_code_blocks"), False)
+    code_block_wrap_indent = default_wrap_indent if wrap_code_blocks else 0
+    code_block_wrap_value = frontmatter.get("code_block_wrap")
+    if code_block_wrap_value is not None:
+        normalized_wrap = code_block_wrap_value.strip()
+        if normalized_wrap:
+            if re.fullmatch(r"-?\d+", normalized_wrap):
+                wrap_code_blocks = True
+                code_block_wrap_indent = max(0, _parse_int(normalized_wrap, default_wrap_indent))
+            else:
+                wrap_flag = _parse_bool(normalized_wrap, wrap_code_blocks)
+                wrap_code_blocks = wrap_flag
+                code_block_wrap_indent = default_wrap_indent if wrap_flag else 0
+    code_block_line_numbers = _parse_bool(frontmatter.get("code_block_line_numbers"), True)
+    blockquote_bars = _parse_bool(frontmatter.get("blockquote_bars"), True)
     fm = FrontMatter(
         h1_font=frontmatter.get("h1_font", "standard").strip() or "standard",
         h2_font=frontmatter.get("h2_font", "standard").strip() or "standard",
@@ -90,6 +106,10 @@ def parse_frontmatter(lines: List[str]) -> Tuple[FrontMatter, List[str]]:
         hyphen_lang=(frontmatter.get("hyphen_lang") or "en_US").strip() or "en_US",
         figlet_fallback=_parse_bool(frontmatter.get("figlet_fallback"), False),
         header_spacing=max(0, _parse_int(frontmatter.get("header_spacing"), 2)),
+        wrap_code_blocks=wrap_code_blocks,
+        code_block_wrap_indent=code_block_wrap_indent,
+        code_block_line_numbers=code_block_line_numbers,
+        blockquote_bars=blockquote_bars,
     )
     return fm, remaining
 
@@ -128,4 +148,3 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

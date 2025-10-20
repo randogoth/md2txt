@@ -5,6 +5,9 @@ h3_font: caps
 margin_left: 12
 margin_right: 12
 paragraph_spacing: 2
+code_block_line_numbers: false
+code_block_wrap: 4
+blockquote_bars: false
 hyphenate: true
 ---
 
