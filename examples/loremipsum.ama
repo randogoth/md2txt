@@ -10,9 +10,13 @@
                         %h Structa hinc vetitus factum
 
 
-    Lorem markdownum omnes tellus, in, Herculeis `=reciprocalPower`= neque
+    Lorem markdownum omnes tellus, in, Herculeis %breciprocalPower%t neque
     promissa est Latiae caput umero talia fidissima, nymphae. Foedera et
     sagittas tenetur adde matri esse: talia manibus.
+
+
+
+    markdown (<markdown.md>)
 
 
 
@@ -29,8 +33,8 @@
     De instat ubi induit fugientia inertes columbas tarda %!terga Parnasia
      %! sententia%t omnia inmotusque, est et aetas sonus. Exhibuit coeperunt,
     canis. Suis minora, tempore fateor neve moderamine erit. Non %!hoc ra-
-    %! diis%t, Aenea etiamnum cogeris superinposita origine nec `=hardening_-
-    search`= dixit vicina. Heros subito populifer adeunt quicquam cum %!A-
+    %! diis%t, Aenea etiamnum cogeris superinposita origine nec %bhardening_-
+    %b search%t dixit vicina. Heros subito populifer adeunt quicquam cum %!A-
                                        %! LES%t Ixion angulus placet reddere.
 
 
@@ -54,14 +58,14 @@
                                     ______/ /
                                     '------'
 
-    Inprudens dum memor alma, casses dedi Sinuessa iam quid adicit `=gate-
-    _truncate_wave`=. Geratur de (<#salientia-iungit-contra-et>), insolida
-    temptat `=open`= carentia; genitorem solet, potens. Adit vos ramos mu-
+    Inprudens dum memor alma, casses dedi Sinuessa iam quid adicit %bgate-
+    %b _truncate_wave%t. Geratur de (<#salientia-iungit-contra-et>), insolida
+    temptat %bopen%t carentia; genitorem solet, potens. Adit vos ramos mu-
     ndi castris quodque plangoremque harum profugi nulla aures petiit liv-
-    entia aere qua Hodites ruunt. Achaidos dilexisse `=redundancy`= prae-
+    entia aere qua Hodites ruunt. Achaidos dilexisse %bredundancy%t prae-
     sagia tenuatus necis %!CAPYS RECORDOR%t tenebras actis signis, reliq-
     uit, placidissime iram liquefactis longe nervi famem. Cura pars na-
-    tique velleris semel et at `=printerWildcardParallel`= inquit posi-
+    tique velleris semel et at %bprinterWildcardParallel%t inquit posi-
     tosque comites ultra.
 
 
@@ -76,7 +80,6 @@
 
 
 
-       `=
            if (firewall(4, 3) == 1 * device_media_parity) {
                system_copy_class += systray + oasis_wi_clean + lpi;
                modelLdap.search_secondary_socket *=
@@ -96,7 +99,6 @@
            memoryHexadecimalMultitasking += oop_android;
            var passive_vdu = bar;
            var ddrJava = leaf(unc_web);
-       `=
 
 
                                 %h Mille parva
@@ -115,7 +117,7 @@
        carchesia nectar mille? Indestrictus vestes ut et offensasque in-
        tibaque deum
        agitur linguae maiestas te rictus %!tecum laniatque dixit%t ad dat-
-       as `=adsl`=.
+       as %badsl%t.
        Vino %!ut%t quod iaculi mutua armis uno est vos totidemque
        exhortor (<#tractaque-serpens-arva-quoque>). Iamdudum Romanae cepi
        linguisque

@@ -70,7 +70,7 @@ class AmaRenderer(TextRenderer):
     def _render_code_block(self, payload: CodeBlockPayload, style: BlockStyle) -> None:
         margin_left, _, _ = self._margins(style)
         base_indent = " " * margin_left + "   "
-        body: List[str] = [base_indent + "`="]
+        body: List[str] = []
         content_width = max(1, self.width - len(base_indent))
         for raw_line in payload.lines:
             line = raw_line.rstrip("\n")
@@ -81,7 +81,8 @@ class AmaRenderer(TextRenderer):
             body.append(base_indent + segments[0])
             for segment in segments[1:]:
                 body.append(base_indent + segment)
-        body.append(base_indent + "`=")
+        if not body:
+            body.append(base_indent)
         self._emit_block(body, stylable=False)
 
     def _render_blockquote(self, payload: BlockQuotePayload, style: BlockStyle) -> None:
@@ -146,7 +147,8 @@ class AmaRenderer(TextRenderer):
         text = IMAGE_RE.sub(self._replace_image, text)
 
         for idx, code in enumerate(code_segments):
-            text = text.replace(f"\u0000CODE{idx}\u0000", f"`={code}`=")
+            formatted = code.replace("%", "%%")
+            text = text.replace(f"\u0000CODE{idx}\u0000", f"%b{formatted}%t")
         return text
 
     @staticmethod
