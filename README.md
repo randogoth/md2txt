@@ -11,6 +11,12 @@ $$ | $$ | $$ |\$$$$$$$ |$$$$$$$$\   \$$$$  |$$  /\$$\   \$$$$ �
 
 This repository contains the `md2txt` command line tool and supporting libraries for transforming Markdown into arcane formats that work well on retro hardware or constrained text viewers. A small plugin API lets you mix-and-match parsers and renderers so additional formats can plug into the same preprocessing pipeline.
 
+Install the CLI directly from GitHub with [uv](https://github.com/astral-sh/uv): 
+
+```
+uv tool install --from github:randogoth/md2txt md2txt
+```
+
 ## CLI
 
 - `md2txt` – converts Markdown into plain text with extensive formatting support. It ships with the default `markdown` parser and `text` renderer plugins, registers optional `micron`, `ama`, and `gemini` renderers for Micron/Ancient Machine Book or Gemtext output, and exposes the core pipeline so you can add your own parser or renderer modules:
@@ -148,4 +154,4 @@ The shared preprocessing helpers—YAML frontmatter parsing, recursive include e
 ---
 
 * Directed and vibe coded by Tobias Raayoni Last
-* Programming by gpt-5-codex
+* Programmed by `gpt-5-codex`
