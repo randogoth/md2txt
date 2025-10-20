@@ -22,6 +22,8 @@ from plugins import (
 )
 from text_renderer import TextRenderer
 
+import micron_renderer  # noqa: F401  # register micron renderer plugin
+
 
 def _split_option(token: str) -> Tuple[str, str]:
     if "=" not in token:
@@ -77,9 +79,13 @@ def convert_markdown(
         renderer_options=effective_renderer_options,
         base_path=base_path,
     )
-    if not isinstance(rendered, list):
-        raise TypeError("Renderer plugin returned unsupported output for md2txt CLI.")
-    return rendered
+    if isinstance(rendered, list):
+        return rendered
+    if isinstance(rendered, tuple):
+        return list(rendered)
+    if isinstance(rendered, str):
+        return rendered.splitlines()
+    raise TypeError("Renderer plugin returned unsupported output for md2txt CLI.")
 
 
 def write_output(path: Optional[Path], lines: List[str]) -> None:
