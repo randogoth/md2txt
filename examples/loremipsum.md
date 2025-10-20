@@ -1,15 +1,13 @@
 ---
-h1_font: big
-h2_font: small
-h3_font: caps
-margin_left: 12
-margin_right: 12
+h1_font: small
+h2_font: caps
+h3_font: title
+margin_left: 4
+margin_right: 4
 paragraph_spacing: 2
-code_block_line_numbers: false
 code_block_wrap: 4
-blockquote_bars: false
 list_marker_indent: 2
-list_text_spacing: 3
+list_text_spacing: 1
 hyphenate: true
 ---
 
@@ -40,10 +38,6 @@ populifer adeunt quicquam cum **ales** Ixion angulus placet reddere.
 
 ## Tractaque serpens arva quoque
 {:.center}
-
-# Include
-
-#[d1 :left](dragon.txt) #[d1 :center :mirror](dragon.txt) #[d1 :right](dragon.txt)
 
 ![[markdown.md]]
 
