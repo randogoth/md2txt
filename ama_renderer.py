@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from functools import partial
 from pathlib import Path
 from typing import Any, Callable, List
@@ -36,22 +37,14 @@ class AmaRenderer(TextRenderer):
         super().__init__(width=min(width, 78), frontmatter=frontmatter)
         self.links.clear()
         self.link_indices.clear()
-        self._base_style = BlockStyle(align="left", margin_left=0, margin_right=0)
 
     # Block rendering -----------------------------------------------------
     def _render_paragraph(self, payload: ParagraphPayload, style: BlockStyle) -> None:
         processed = self._process_inline(payload.text)
-        self._emit_render(
-            lambda target_style: self._wrap_text(
-                processed,
-                initial_indent="",
-                subsequent_indent="",
-                style=target_style,
-                hyphenate=self.hyphenate,
-            ),
-            style,
-            stylable=True,
-        )
+        def render_fn(target_style: BlockStyle) -> List[str]:
+            return self._wrap_and_format(processed, target_style)
+
+        self._emit_block(render_fn(style), stylable=True, render_fn=render_fn, style=style)
         if self.paragraph_spacing > 0:
             self.output.extend([""] * self.paragraph_spacing)
 
@@ -84,17 +77,10 @@ class AmaRenderer(TextRenderer):
     def _render_blockquote(self, payload: BlockQuotePayload, style: BlockStyle) -> None:
         processed = self._process_inline(payload.text)
         indent = " " * (3 * max(1, payload.depth))
-        self._emit_render(
-            lambda target_style: self._wrap_text(
-                processed,
-                initial_indent=indent,
-                subsequent_indent=indent,
-                style=target_style,
-                hyphenate=self.hyphenate,
-            ),
-            style,
-            stylable=True,
-        )
+        def render_fn(target_style: BlockStyle) -> List[str]:
+            return self._wrap_and_format(processed, target_style, initial_indent=indent, subsequent_indent=indent)
+
+        self._emit_block(render_fn(style), stylable=True, render_fn=render_fn, style=style)
 
     def _render_list_item(self, payload: ListItemPayload, style: BlockStyle) -> None:
         base_indent = payload.indent.replace("\t", "    ")
@@ -104,17 +90,15 @@ class AmaRenderer(TextRenderer):
         initial = f"{base_indent}{marker_indent}{marker}{spacing}"
         subsequent = f"{base_indent}{marker_indent}{' ' * len(marker)}{spacing}"
         processed = self._process_inline(payload.text)
-        self._emit_render(
-            lambda target_style: self._wrap_text(
+        def render_fn(target_style: BlockStyle) -> List[str]:
+            return self._wrap_and_format(
                 processed,
+                target_style,
                 initial_indent=initial,
                 subsequent_indent=subsequent,
-                style=target_style,
-                hyphenate=self.hyphenate,
-            ),
-            style,
-            stylable=True,
-        )
+            )
+
+        self._emit_block(render_fn(style), stylable=True, render_fn=render_fn, style=style)
 
     def _render_horizontal_rule(self, _payload: object, style: BlockStyle) -> None:
         margin_left, _, available = self._margins(style)
@@ -179,16 +163,62 @@ class AmaRenderer(TextRenderer):
             return f"{alt} ({formatted_url})"
         return formatted_url
 
-    def _combine_styles(self, base: BlockStyle, spec: StyleSpec | None) -> BlockStyle:
-        combined = super()._combine_styles(base, spec)
-        return BlockStyle(align=combined.align, margin_left=0, margin_right=0)
-
     def _emphasis_handler(self, prefix: str, transform: Callable[[str], str]) -> Callable[[Any], str]:
         def handler(match) -> str:
             content = transform(match.group(1))
             return self._apply_emphasis_spacing(match.string, match.start(), match.end(), f"{prefix}{content}%t")
 
         return handler
+
+    def _wrap_and_format(
+        self,
+        text: str,
+        style: BlockStyle,
+        *,
+        initial_indent: str = "",
+        subsequent_indent: str | None = None,
+    ) -> List[str]:
+        lines = self._wrap_text(
+            text,
+            initial_indent=initial_indent,
+            subsequent_indent=subsequent_indent if subsequent_indent is not None else initial_indent,
+            style=style,
+            hyphenate=self.hyphenate,
+        )
+        return self._propagate_modes(lines)
+
+    def _propagate_modes(self, lines: List[str]) -> List[str]:
+        mode = "%t"
+        result: List[str] = []
+        for line in lines:
+            current_line = line
+            if mode in {"%!", "%b"}:
+                stripped = current_line.lstrip()
+                leading_ws = current_line[: len(current_line) - len(stripped)]
+                while stripped.startswith(("%t", "%!", "%b")):
+                    stripped = stripped[2:]
+                spacer = " " if stripped and not stripped.startswith(" ") else ""
+                current_line = f"{leading_ws}{mode}{spacer}{stripped}" if stripped else f"{leading_ws}{mode}"
+            end_mode = self._line_end_mode(current_line)
+            result.append(current_line)
+            mode = end_mode if end_mode in {"%!", "%b"} else "%t"
+        return result
+
+    @staticmethod
+    def _line_end_mode(line: str) -> str:
+        mode = "%t"
+        idx = 0
+        while True:
+            pos = line.find("%", idx)
+            if pos == -1 or pos + 1 >= len(line):
+                break
+            code = line[pos:pos + 2]
+            if code in {"%!", "%b", "%t"}:
+                mode = code
+            elif code == "%%":
+                pass
+            idx = pos + 2
+        return mode
 
 
 def _ama_renderer_factory(*, frontmatter: FrontMatter, **options: Any) -> AmaRenderer:
