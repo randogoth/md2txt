@@ -1,11 +1,11 @@
 # md2amb utilities
 
-This repository contains command line helpers for transforming Markdown into formats that work well on retro hardware or constrained text viewers.
+This repository contains command line helpers for transforming Markdown into formats that work well on retro hardware or constrained text viewers. A small plugin API lets you mix-and-match parsers and renderers so additional formats can plug into the same preprocessing pipeline.
 
 ## Tools
 
 - `md2amb.py` – converts Markdown into Amber-screen formatted text (see script for details).
-- `md2txt.py` – converts Markdown into 80-column, DOS-compatible plain text with extensive formatting support:
+- `md2txt.py` – converts Markdown into 80-column, DOS-compatible plain text with extensive formatting support. It ships with the default `markdown` parser and `text` renderer plugins and exposes the core pipeline so you can add your own parser or renderer modules:
   - FIGlet-rendered headings (H1–H3) driven by optional YAML frontmatter (`h1_font`, `h2_font`, `h3_font`).
   - H4+ headings rendered in uppercase with dashed underlines.
   - Emphasis styles converted to spaced or delimited characters, e.g. `**bold**` → `B O L D`, `__strong__` → `_s_t_r_o_n_g_`, `~~strike~~` → `~s~t~r~i~k~e~`.
@@ -26,12 +26,14 @@ This repository contains command line helpers for transforming Markdown into for
 ## Usage
 
 ```bash
-python md2txt.py input.md -o output.txt          # convert to DOS-friendly text
-python md2txt.py input.md                         # write result to stdout
-python md2txt.py input.md --width 72             # override column width
+python md2txt.py input.md -o output.txt                         # convert to DOS-friendly text
+python md2txt.py input.md                                      # write result to stdout
+python md2txt.py input.md --width 72                           # override column width
+python md2txt.py input.md --parser markdown --renderer text    # explicitly select defaults
+python md2txt.py input.md --renderer-option width=68           # pass KEY=VALUE to a renderer
 ```
 
-Both scripts accept `--help` for the full option list.
+`--parser` and `--renderer` select a plugin by name (defaults are `markdown` and `text`). Repeatable `--parser-option KEY=VALUE` and `--renderer-option KEY=VALUE` pairs are forwarded to the plugin factories as keyword arguments in addition to the defaults supplied by the CLI. Both scripts accept `--help` for the full option list.
 
 ## FIGlet Fonts via Frontmatter
 
@@ -114,3 +116,32 @@ All values are optional—defaults maintain the legacy behaviour.
 ## Output Line Endings
 
 Generated text uses CRLF line endings to maintain DOS compatibility.
+
+## Plugin Architecture
+
+The conversion pipeline lives in `conversion_core.py` and is exposed via `run_conversion`. It is designed around lightweight factories:
+
+- **Parser factories** receive `base_style: BlockStyle` plus any extra keyword arguments and must return an object with a `parse(lines: Iterable[str]) -> Iterator[BlockEvent | StyleUpdateEvent]` method. The bundled `MarkdownParser` implements this interface.
+- **Renderer factories** receive `frontmatter: FrontMatter` and arbitrary keyword arguments and must return an object that provides `handle_event(event)` and `finalize() -> Any`. The `TextRenderer` returns a list of DOS-friendly output lines; other renderers may return any data appropriate for their target format.
+
+Plugins register themselves through the helpers in `plugins.py`:
+
+```python
+from plugins import register_parser, register_renderer
+
+def my_parser_factory(*, base_style, **options):
+    return MyParser(base_style, **options)
+
+register_parser("my-markdown", my_parser_factory)
+```
+
+```python
+def my_renderer_factory(*, frontmatter, **options):
+    return MyRenderer(frontmatter, target=options.get("target"))
+
+register_renderer("ansi", my_renderer_factory)
+```
+
+Once registered (for example in a small module that imports `md2txt.py`), the new plugins are available via `--parser my-markdown` or `--renderer ansi`. The CLI lists registered plugin names in `--help`, and the helper functions `available_parsers()` / `available_renderers()` return the sorted names if you need to build higher-level tooling.
+
+The shared preprocessing helpers—YAML frontmatter parsing, recursive include expansion, and ASCII art sentinels—also live in `conversion_core.py`, allowing alternate front-ends to reuse exactly the same behaviour without duplicating code.

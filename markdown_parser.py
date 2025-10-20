@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 from typing import Dict, Iterable, Iterator, List, Optional, Union
 
+from conversion_core import ASCII_SENTINEL_PREFIX
 from md_types import (
     AsciiArtPayload,
     AsciiArtPiece,
@@ -31,7 +32,6 @@ PARA_OPEN_RE = re.compile(r"^\s*<p\b([^>]*)>\s*$", re.IGNORECASE)
 PARA_CLOSE_RE = re.compile(r"^\s*</p>\s*$", re.IGNORECASE)
 MMD_ATTR_LINE_RE = re.compile(r"^\{\s*:(.+)\}\s*$")
 MMD_ATTR_TAIL_RE = re.compile(r"(.*?)\s*\{\s*:(.+?)\}\s*$")
-ASCII_SENTINEL_PREFIX = "\u0000ASCII:"
 
 
 class MarkdownParser:
